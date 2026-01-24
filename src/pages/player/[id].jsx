@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import socket, { joinDiceRoom, joinPortraitRoom } from "../../utils/socket";
 import { prisma } from "../../database";
 import { postJSON } from "../../lib/api";
+import { getActiveCombatContext } from "../../lib/combat";
 
 import PlayerHUD from "../../components/player/PlayerHUD";
 import ActionBar from "../../components/player/ActionBar";
@@ -50,12 +51,30 @@ export const getServerSideProps = async ({ params }) => {
     orderBy: { id: "asc" },
   });
 
-  // ✅ alvos simples (depois: só quem está no combate)
-  const targets = await prisma.character.findMany({
-    where: { id: { not: characterId } },
-    select: { id: true, name: true, is_dead: true },
-    orderBy: { id: "asc" },
-  });
+  const { combatId, participants } = await getActiveCombatContext(
+    prisma,
+    characterId,
+  );
+
+  let targets = [];
+  if (participants.length > 0) {
+    const targetIds = participants.filter(
+      (id) => Number(id) !== Number(characterId),
+    );
+    if (targetIds.length > 0) {
+      targets = await prisma.character.findMany({
+        where: { id: { in: targetIds } },
+        select: { id: true, name: true, is_dead: true },
+        orderBy: { id: "asc" },
+      });
+    }
+  } else {
+    targets = await prisma.character.findMany({
+      where: { id: { not: characterId } },
+      select: { id: true, name: true, is_dead: true },
+      orderBy: { id: "asc" },
+    });
+  }
 
   return {
     props: {
@@ -67,6 +86,7 @@ export const getServerSideProps = async ({ params }) => {
         statuses: JSON.parse(JSON.stringify(statuses || [])),
         techniques: JSON.parse(JSON.stringify(techniques || [])),
         targets: JSON.parse(JSON.stringify(targets || [])),
+        combatId: combatId || null,
       },
     },
   };
@@ -99,8 +119,13 @@ export default function PlayerPage({ characterId, initial }) {
         setSnapshot((prev) => ({
           ...prev,
           ...data,
-          techniques: prev?.techniques || initial?.techniques || [],
-          targets: prev?.targets || initial?.targets || [],
+          techniques:
+            data?.techniques ??
+            prev?.techniques ??
+            initial?.techniques ??
+            [],
+          targets:
+            data?.targets ?? prev?.targets ?? initial?.targets ?? [],
         }));
       }
     } catch {
@@ -171,6 +196,19 @@ export default function PlayerPage({ characterId, initial }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const targets = snapshot?.targets || [];
+    if (!targets.length) return;
+    const selectedExists = targets.some(
+      (t) => Number(t.id) === Number(selectedTargetId),
+    );
+    if (!selectedExists) {
+      setSelectedTargetId(
+        targets.find((t) => !t.is_dead)?.id || targets[0]?.id || null,
+      );
+    }
+  }, [snapshot?.targets, selectedTargetId]);
 
   if (!characterId || !initial) {
     return (
