@@ -77,6 +77,35 @@ export default async function handler(req, res) {
     }
 
     // evita problemas com Date/BigInt etc
+    let combat = null;
+    if (combatId) {
+      const combatRow = await prisma.combat.findUnique({
+        where: { id: combatId },
+        select: {
+          id: true,
+          isActive: true,
+          participants: true,
+          roundNumber: true,
+          turnIndex: true,
+          turnOrder: true,
+          actedThisRound: true,
+        },
+      });
+
+      if (combatRow) {
+        const order = Array.isArray(combatRow.turnOrder)
+          ? combatRow.turnOrder
+          : null;
+        const currentActorId = order
+          ? Number(order[combatRow.turnIndex || 0])
+          : null;
+        combat = {
+          ...combatRow,
+          currentActorId,
+        };
+      }
+    }
+
     const payload = {
       ok: true,
       characterId,
@@ -87,6 +116,7 @@ export default async function handler(req, res) {
       techniques: JSON.parse(JSON.stringify(techniques || [])),
       targets: JSON.parse(JSON.stringify(targets || [])),
       combatId: combatId || null,
+      combat: combat ? JSON.parse(JSON.stringify(combat)) : null,
     };
 
     return res.status(200).json(payload);

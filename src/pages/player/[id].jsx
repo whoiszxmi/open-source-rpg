@@ -98,6 +98,8 @@ export default function PlayerPage({ characterId, initial }) {
   const [snapshot, setSnapshot] = useState(initial);
   const [feed, setFeed] = useState([]);
   const [busy, setBusy] = useState(false);
+  const combatId = snapshot?.combatId || null;
+  const combatState = snapshot?.combat || null;
 
   // ✅ alvo + técnica selecionados
   const [selectedTargetId, setSelectedTargetId] = useState(
@@ -119,6 +121,10 @@ export default function PlayerPage({ characterId, initial }) {
         setSnapshot((prev) => ({
           ...prev,
           ...data,
+          techniques: data?.techniques || [],
+          targets: data?.targets || [],
+          combatId: data?.combatId || null,
+          combat: data?.combat || null,
           techniques:
             data?.techniques ??
             prev?.techniques ??
@@ -131,7 +137,7 @@ export default function PlayerPage({ characterId, initial }) {
     } catch {
       // silencioso
     }
-  }, [characterId, initial?.techniques, initial?.targets]);
+  }, [characterId]);
 
   // join rooms + listeners
   useEffect(() => {
@@ -199,6 +205,10 @@ export default function PlayerPage({ characterId, initial }) {
 
   useEffect(() => {
     const targets = snapshot?.targets || [];
+    if (!targets.length) {
+      if (selectedTargetId != null) setSelectedTargetId(null);
+      return;
+    }
     if (!targets.length) return;
     const selectedExists = targets.some(
       (t) => Number(t.id) === Number(selectedTargetId),
@@ -315,6 +325,15 @@ export default function PlayerPage({ characterId, initial }) {
 
   // ✅ ataque real: usa selectedTechniqueId (se tiver)
   async function doAttack({ targetId, techniqueId, jujutsu } = {}) {
+    if (!combatId) {
+      setFeed((f) =>
+        [
+          ...f,
+          "❌ Nenhum combate ativo. Entre em um combate para atacar.",
+        ].slice(-50),
+      );
+      return;
+    }
     const tId = targetId ?? selectedTargetId;
     if (!tId) {
       setFeed((f) => [...f, "❌ Selecione um alvo antes de atacar."].slice(-50));
@@ -338,6 +357,7 @@ export default function PlayerPage({ characterId, initial }) {
     setBusy(true);
     try {
       const payload = await postJSON("/combat/resolve", {
+        combatId,
         attacker_id: characterId,
         target_id: Number(tId),
         max_number: 20,
@@ -391,6 +411,13 @@ export default function PlayerPage({ characterId, initial }) {
               <div className="text-2xl font-semibold tracking-tight">{ch?.name}</div>
               <div className="text-sm text-white/60">
                 HUD do jogador • {ch?.is_dead ? "☠️ Morto" : "🟢 Vivo"}
+                {combatId ? ` • Combate #${combatId}` : " • Sem combate ativo"}
+                {combatState?.roundNumber != null
+                  ? ` • Rodada ${combatState.roundNumber}`
+                  : ""}
+                {combatState?.currentActorId
+                  ? ` • Turno #${combatState.currentActorId}`
+                  : ""}
               </div>
             </div>
 
@@ -463,6 +490,7 @@ export default function PlayerPage({ characterId, initial }) {
                 targets={snapshot.targets || []}
                 selectedTargetId={selectedTargetId}
                 onChangeTarget={setSelectedTargetId}
+                combatId={combatId}
                 techniques={snapshot.techniques || []}
                 selectedTechniqueId={selectedTechniqueId}
                 onChangeTechnique={setSelectedTechniqueId}

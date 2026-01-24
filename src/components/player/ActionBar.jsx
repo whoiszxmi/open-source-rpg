@@ -13,6 +13,7 @@ export default function ActionBar({
   targets = [],
   selectedTargetId = null,
   onChangeTarget,
+  combatId = null,
 }) {
   const [reinforce, setReinforce] = useState(2);
   const [boost, setBoost] = useState(5);
@@ -26,7 +27,10 @@ export default function ActionBar({
       <CardHeader>
         <div className="font-semibold text-white">Ações rápidas</div>
         <div className="text-xs text-white/60">
-          Tudo aqui chama o backend (seguro).
+          Tudo aqui chama o backend (seguro).{" "}
+          <span className="text-white/70">
+            {combatId ? `Combate #${combatId} ativo` : "Sem combate ativo"}
+          </span>
         </div>
       </CardHeader>
 
@@ -148,9 +152,15 @@ export default function ActionBar({
           <div className="flex gap-2">
             <Button
               className="flex-1"
-              disabled={!can || !selectedTargetId}
+              disabled={!can || !selectedTargetId || !combatId}
               onClick={() => onAttack?.({})}
-              title={!selectedTargetId ? "Selecione um alvo primeiro." : "Ataca o alvo selecionado"}
+              title={
+                !combatId
+                  ? "Entre em um combate para atacar."
+                  : !selectedTargetId
+                    ? "Selecione um alvo primeiro."
+                    : "Ataca o alvo selecionado"
+              }
             >
               Atacar
             </Button>
