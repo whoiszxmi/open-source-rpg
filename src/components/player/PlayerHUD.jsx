@@ -44,15 +44,15 @@ export default function PlayerHUD({
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-purple-500/30 to-cyan-500/20 p-[1px]">
             <div className="h-full w-full rounded-xl bg-black/60 overflow-hidden">
-              {character?.standard_character_picture_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={character.standard_character_picture_url}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              ) : null}
-            </div>
+            {character?.standard_character_picture_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={character.standard_character_picture_url}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : null}
+          </div>
           </div>
 
           <div className="min-w-0">

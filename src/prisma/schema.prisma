@@ -151,10 +151,6 @@ model StatGroup {
   rank        Rank          @default(F)
 
   character Character @relation("CharacterStatGroups", fields: [characterId], references: [id])
-  characterPhysical Character? @relation("CharacterStatsPhysical")
-  characterJujutsu Character? @relation("CharacterStatsJujutsu")
-  characterMental Character? @relation("CharacterStatsMental")
-  characterExtra Character? @relation("CharacterStatsExtra")
   stats     StatValue[]
 
   @@index([characterId])
