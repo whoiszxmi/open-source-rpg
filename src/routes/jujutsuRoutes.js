@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
+const { prisma } = require("../database");
 const JujutsuService = require("../services/JujutsuService");
 const DomainService = require("../services/DomainService");
 
@@ -16,10 +17,8 @@ router.get("/:characterId", async (req, res) => {
 
     // Se seu JujutsuService ainda não inclui domainState, buscamos aqui (sem quebrar)
     // (Pode remover se já estiver incluindo domainState lá)
-    if (data && data.id) {
-      const domainState = (await require("@prisma/client").PrismaClient)
-        ? null
-        : null;
+    if (data && data.id && prisma) {
+      // Placeholder to keep prisma available if needed for future domainState fetch.
     }
 
     return res.json(data);
