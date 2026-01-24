@@ -1,0 +1,25 @@
+[
+  {
+    "key": "fragile_body",
+    "name": "Corpo Frágil",
+    "rank": "D_MINUS",
+    "reward": 2,
+    "category": "PHYSICAL",
+    "description": "Seu corpo sofre sob pressão contínua.",
+    "effects": {
+      "stats": { "OUTPUT": -1 }
+    }
+  },
+  {
+    "key": "output_seal",
+    "name": "Selo de Output",
+    "rank": "C_MINUS",
+    "reward": 4,
+    "category": "JUJUTSU",
+    "description": "Limita o fluxo de energia amaldiçoada.",
+    "effects": {
+      "stats": { "OUTPUT": -3 },
+      "conflicts": ["overflow_output"]
+    }
+  }
+]

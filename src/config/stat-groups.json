@@ -1,0 +1,6 @@
+{
+  "PHYSICAL": ["FORCE", "AGILITY", "RESIST"],
+  "JUJUTSU": ["OUTPUT", "CONTROL", "EA"],
+  "MENTAL": ["INT", "FOCUS"],
+  "EXTRA": ["ACCUMULATION"]
+}

@@ -13,6 +13,15 @@ const { generateRandomNumber } = require("./utils");
 const engine = require("./system/jujutsu/engine");
 const { resolveSureHit } = require("./system/jujutsu/domainEngine");
 const DomainService = require("./services/DomainService");
+const RankService = require("./services/RankService");
+const EnergyService = require("./services/EnergyService");
+const XPService = require("./services/XPService");
+const AccumulationService = require("./services/AccumulationService");
+const BlackFlashService = require("./services/BlackFlashService");
+const StatsService = require("./services/StatsService");
+const SeedService = require("./services/SeedService");
+const SnapshotService = require("./services/SnapshotService");
+const statGroupsConfig = require("./config/stat-groups.json");
 
 // Status
 const CombatStatusService = require("./services/CombatStatusService");
@@ -31,6 +40,234 @@ app.use(express.json());
 app.use("/jujutsu", jujutsuRoutes);
 app.use("/status", statusRoutes);
 app.use("/combat", combatRoutes);
+
+app.get("/player/:id/snapshot", async (req, res) => {
+  try {
+    const characterId = Number(req.params.id);
+    if (!characterId) {
+      return res.status(400).json({ ok: false, error: "invalid_character_id" });
+    }
+
+    const snapshot = await SnapshotService.getPlayerSnapshot(prisma, characterId);
+    if (!snapshot) {
+      return res.status(404).json({ ok: false, error: "character_not_found" });
+    }
+
+    return res.json(snapshot);
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
+
+app.post("/character/create", async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.name) {
+      return res.status(400).json({ ok: false, error: "missing_name" });
+    }
+
+    const character = await prisma.character.create({
+      data: {
+        name: body.name,
+        player_name: body.player_name || null,
+        current_hit_points: toInt(body.current_hit_points, 0),
+        max_hit_points: toInt(body.max_hit_points, 0),
+      },
+    });
+
+    const groupEntries = Object.entries(statGroupsConfig || {});
+    const createdGroups = [];
+
+    for (const [type, keys] of groupEntries) {
+      const group = await prisma.statGroup.create({
+        data: {
+          characterId: character.id,
+          type,
+          totalPoints: 0,
+          rank: RankService.getRankForPoints(0),
+        },
+      });
+
+      if (Array.isArray(keys) && keys.length > 0) {
+        await prisma.statValue.createMany({
+          data: keys.map((key) => ({
+            groupId: group.id,
+            key: String(key).toUpperCase(),
+            value: 0,
+          })),
+        });
+      }
+
+      createdGroups.push(group);
+    }
+
+    const groupMap = createdGroups.reduce((acc, group) => {
+      acc[group.type] = group;
+      return acc;
+    }, {});
+
+    await prisma.character.update({
+      where: { id: character.id },
+      data: {
+        statsPhysicalId: groupMap.PHYSICAL?.id || null,
+        statsJujutsuId: groupMap.JUJUTSU?.id || null,
+        statsMentalId: groupMap.MENTAL?.id || null,
+        statsExtraId: groupMap.EXTRA?.id || null,
+      },
+    });
+
+    await prisma.blackFlashState.create({
+      data: { characterId: character.id, activeTurns: 0, nextThreshold: 20 },
+    });
+
+    return res.json({
+      ok: true,
+      character,
+      statGroups: createdGroups,
+    });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
+
+app.post("/character/add-blessing", async (req, res) => {
+  try {
+    const { characterId, blessingKey, blessingId } = req.body || {};
+    if (!characterId || (!blessingKey && !blessingId)) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "missing_character_or_blessing" });
+    }
+
+    const blessing = blessingId
+      ? await prisma.blessing.findUnique({ where: { id: Number(blessingId) } })
+      : await prisma.blessing.findUnique({
+          where: { key: String(blessingKey) },
+        });
+
+    if (!blessing) {
+      return res.status(404).json({ ok: false, error: "blessing_not_found" });
+    }
+
+    const conflict = await AccumulationService.hasConflict(
+      prisma,
+      characterId,
+      blessing,
+      "blessing",
+    );
+    if (conflict) {
+      return res.status(400).json({ ok: false, error: "conflict_with_curse" });
+    }
+
+    const allowed = await AccumulationService.canAddBlessing(
+      prisma,
+      characterId,
+      blessing,
+    );
+    if (!allowed) {
+      return res.status(400).json({ ok: false, error: "accumulation_negative" });
+    }
+
+    const existing = await prisma.characterBlessing.findFirst({
+      where: { characterId: Number(characterId), blessingId: blessing.id },
+    });
+    if (existing) {
+      return res.json({ ok: true, blessing, alreadyOwned: true });
+    }
+
+    const link = await prisma.characterBlessing.create({
+      data: { characterId: Number(characterId), blessingId: blessing.id },
+    });
+
+    return res.json({ ok: true, blessing, link });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
+
+app.post("/character/add-curse", async (req, res) => {
+  try {
+    const { characterId, curseKey, curseId } = req.body || {};
+    if (!characterId || (!curseKey && !curseId)) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "missing_character_or_curse" });
+    }
+
+    const curse = curseId
+      ? await prisma.curse.findUnique({ where: { id: Number(curseId) } })
+      : await prisma.curse.findUnique({
+          where: { key: String(curseKey) },
+        });
+
+    if (!curse) {
+      return res.status(404).json({ ok: false, error: "curse_not_found" });
+    }
+
+    const conflict = await AccumulationService.hasConflict(
+      prisma,
+      characterId,
+      curse,
+      "curse",
+    );
+    if (conflict) {
+      return res.status(400).json({ ok: false, error: "conflict_with_blessing" });
+    }
+
+    const allowed = await AccumulationService.canAddCurse(
+      prisma,
+      characterId,
+      curse,
+    );
+    if (!allowed) {
+      return res.status(400).json({ ok: false, error: "accumulation_negative" });
+    }
+
+    const existing = await prisma.characterCurse.findFirst({
+      where: { characterId: Number(characterId), curseId: curse.id },
+    });
+    if (existing) {
+      return res.json({ ok: true, curse, alreadyOwned: true });
+    }
+
+    const link = await prisma.characterCurse.create({
+      data: { characterId: Number(characterId), curseId: curse.id },
+    });
+
+    return res.json({ ok: true, curse, link });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
+
+app.post("/character/levelup", async (req, res) => {
+  try {
+    const { characterId, xpGained } = req.body || {};
+    if (!characterId) {
+      return res.status(400).json({ ok: false, error: "missing_characterId" });
+    }
+
+    const result = await XPService.applyXp(
+      prisma,
+      characterId,
+      Number(xpGained || 0),
+    );
+
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
 
 // Next + Socket
 const server = http.Server(app);
@@ -357,39 +594,58 @@ app.post("/combat/resolve", async (req, res) => {
     const times = body.times ? Number(body.times) : 1;
     const baseDamage = body.baseDamage != null ? Number(body.baseDamage) : 5;
 
-    // ✅ TRAVA DE TURNO (se combatId presente)
-    if (combatId) {
-      const combat = await prisma.combat.findUnique({
-        where: { id: combatId },
-        select: { turnOrder: true, turnIndex: true, actedThisRound: true },
-      });
-
-      const order = Array.isArray(combat?.turnOrder) ? combat.turnOrder : null;
-      if (!order || order.length === 0) {
-        return res.status(400).json({ error: "turnOrder_not_set" });
-      }
-
-      const currentActorId = Number(order[Number(combat.turnIndex) || 0]);
-      if (currentActorId !== attackerId) {
-        return res.status(400).json({
-          error: "not_your_turn",
-          details: `Agora é o turno do personagem ${currentActorId}`,
-          currentActorId,
-        });
-      }
-
-      const acted = Array.isArray(combat.actedThisRound)
-        ? combat.actedThisRound
-        : [];
-      if (acted.includes(attackerId)) {
-        return res.status(400).json({ error: "already_acted_this_round" });
-      }
-
-      await prisma.combat.update({
-        where: { id: combatId },
-        data: { actedThisRound: [...acted, attackerId] },
+    if (!combatId) {
+      return res.status(400).json({
+        error: "missing_combatId",
+        details: "Combate inválido ou ausente.",
       });
     }
+
+    const combat = await prisma.combat.findUnique({
+      where: { id: combatId },
+      select: {
+        participants: true,
+        turnOrder: true,
+        turnIndex: true,
+        actedThisRound: true,
+      },
+    });
+    if (!combat) {
+      return res.status(404).json({ error: "combat_not_found" });
+    }
+
+    const participants = Array.isArray(combat.participants)
+      ? combat.participants
+      : [];
+    if (!participants.includes(attackerId) || !participants.includes(targetId)) {
+      return res.status(400).json({ error: "combat_participant_required" });
+    }
+
+    const order = Array.isArray(combat.turnOrder) ? combat.turnOrder : null;
+    if (!order || order.length === 0) {
+      return res.status(400).json({ error: "turnOrder_not_set" });
+    }
+
+    const currentActorId = Number(order[Number(combat.turnIndex) || 0]);
+    if (currentActorId !== attackerId) {
+      return res.status(400).json({
+        error: "not_your_turn",
+        details: `Agora é o turno do personagem ${currentActorId}`,
+        currentActorId,
+      });
+    }
+
+    const acted = Array.isArray(combat.actedThisRound)
+      ? combat.actedThisRound
+      : [];
+    if (acted.includes(attackerId)) {
+      return res.status(400).json({ error: "already_acted_this_round" });
+    }
+
+    await prisma.combat.update({
+      where: { id: combatId },
+      data: { actedThisRound: [...acted, attackerId] },
+    });
 
     const attacker = await prisma.character.findUnique({
       where: { id: attackerId },
@@ -449,6 +705,40 @@ app.post("/combat/resolve", async (req, res) => {
     let rollBonus = 0;
     const notes = [];
 
+    const outputValue = await StatsService.getStatValue(
+      prisma,
+      attackerId,
+      "OUTPUT",
+      "JUJUTSU",
+    );
+    let controlValue = await StatsService.getStatValue(
+      prisma,
+      attackerId,
+      "CONTROL",
+      "JUJUTSU",
+    );
+
+    const blackFlashAttempt = await BlackFlashService.attemptBlackFlash(
+      prisma,
+      attackerId,
+      outputValue,
+    );
+    let blackFlashTriggered = blackFlashAttempt.triggered;
+    let blackFlashMultiplier = blackFlashAttempt.triggered
+      ? blackFlashAttempt.damageMultiplier
+      : 1;
+    let outputMultiplier = 1;
+
+    if ((blackFlashAttempt.state?.activeTurns || 0) > 0) {
+      outputMultiplier += 1.2;
+      controlValue += Math.ceil(controlValue * 0.3);
+      if (blackFlashTriggered) {
+        notes.push("⚡ Black Flash ativado! Dano atual ampliado.");
+      } else {
+        notes.push("⚡ Zona Black Flash ativa: Output +120%, Controle +30%.");
+      }
+    }
+
     // domínio
     const sure = resolveSureHit(attacker.domainState, target.domainState);
     if (sure.sureHit)
@@ -495,8 +785,12 @@ app.post("/combat/resolve", async (req, res) => {
       if (!technique)
         return res.status(400).json({ error: "technique_not_found" });
 
-      engine.spendCursedEnergy(s, technique.cost);
-      notes.push(`Técnica: ${technique.name} (custo ${technique.cost} EA)`);
+      const controlRank = RankService.getRankForPoints(controlValue);
+      const finalCost = EnergyService.getFinalCost(technique.cost, controlRank);
+      engine.spendCursedEnergy(s, finalCost);
+      notes.push(
+        `Técnica: ${technique.name} (custo ${finalCost} EA, rank ${controlRank})`,
+      );
       if (technique.effect) notes.push(`Efeito: ${technique.effect}`);
     }
 
@@ -556,7 +850,18 @@ app.post("/combat/resolve", async (req, res) => {
     let targetAfter = null;
 
     if (hits > 0) {
-      damageApplied = Math.max(0, Math.trunc(baseDamage)) * hits;
+      const rawDamage =
+        Math.max(0, Math.trunc(baseDamage)) *
+        hits *
+        outputMultiplier *
+        blackFlashMultiplier;
+      damageApplied = Math.trunc(rawDamage);
+      if (outputMultiplier > 1) {
+        notes.push(`Bônus de Output aplicado: x${outputMultiplier.toFixed(2)}`);
+      }
+      if (blackFlashMultiplier > 1) {
+        notes.push(`Multiplicador Black Flash: x${blackFlashMultiplier}`);
+      }
 
       const targetNow = await prisma.character.findUnique({
         where: { id: targetId },
@@ -622,7 +927,7 @@ app.post("/combat/resolve", async (req, res) => {
       sureHit: sure.sureHit,
       defenseScore,
       hits,
-      damageApplied,
+      damageApplied: Math.trunc(damageApplied),
       targetAfter: targetAfter
         ? {
             current_hit_points: targetAfter.current_hit_points,
@@ -641,6 +946,12 @@ app.post("/combat/resolve", async (req, res) => {
           mentalPressure: s.mentalPressure,
           domainUnlocked: s.domainUnlocked,
         },
+      },
+      blackFlash: {
+        triggered: blackFlashTriggered,
+        roll: blackFlashAttempt.roll,
+        nextThreshold: blackFlashAttempt.state?.nextThreshold,
+        activeTurns: blackFlashAttempt.state?.activeTurns,
       },
     };
 
@@ -684,6 +995,21 @@ app.post("/combat/resolve", async (req, res) => {
       }
     }
 
+    if (blackFlashTriggered) {
+      io.to(`combat_${combatId}`).emit("black_flash_triggered", {
+        combatId: Number(combatId),
+        characterId: attackerId,
+        roll: blackFlashAttempt.roll,
+        nextThreshold: blackFlashAttempt.state?.nextThreshold,
+      });
+    }
+
+    io.to(`combat_${combatId}`).emit("combat_resolved", payload);
+
+    if (!blackFlashTriggered) {
+      await BlackFlashService.tickTurn(prisma, attackerId);
+    }
+
     return res.json(payload);
   } catch (e) {
     return res
@@ -714,6 +1040,10 @@ io.on("connect", (socket) => {
 
 // Next handler
 nextApp.prepare().then(() => {
+  SeedService.ensureBlessingsAndCurses(prisma).catch((e) => {
+    console.error("[Seed] Failed to sync blessings/curses:", e);
+  });
+
   app.all("*", (req, res) => nextHandler(req, res));
 
   server.listen(process.env.PORT || 3000, (err) => {

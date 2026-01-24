@@ -1,0 +1,36 @@
+[
+  {
+    "key": "reinforced_body",
+    "name": "Corpo Reforçado",
+    "rank": "D",
+    "cost": 3,
+    "category": "PHYSICAL",
+    "description": "Aprimora o corpo com energia amaldiçoada básica.",
+    "effects": {
+      "stats": { "OUTPUT": 2 }
+    }
+  },
+  {
+    "key": "sharp_focus",
+    "name": "Foco Afiado",
+    "rank": "C",
+    "cost": 5,
+    "category": "MENTAL",
+    "description": "Melhora concentração e tomada de decisão.",
+    "effects": {
+      "stats": { "CONTROL": 3 }
+    }
+  },
+  {
+    "key": "overflow_output",
+    "name": "Output em Excesso",
+    "rank": "B",
+    "cost": 8,
+    "category": "JUJUTSU",
+    "description": "Aumenta drasticamente o fluxo de energia.",
+    "effects": {
+      "stats": { "OUTPUT": 6 },
+      "conflicts": ["output_seal"]
+    }
+  }
+]
