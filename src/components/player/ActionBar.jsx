@@ -23,9 +23,14 @@ export default function ActionBar({
   const hasTargets = (targets || []).length > 0;
 
   return (
-    <Card>
+    <Card className="border-white/10 bg-gradient-to-br from-zinc-950 via-indigo-950/30 to-zinc-900">
       <CardHeader>
-        <div className="font-semibold text-white">Ações rápidas</div>
+        <div className="flex items-center justify-between">
+          <div className="font-semibold text-white">Ações rápidas</div>
+          <span className="text-[10px] uppercase tracking-[0.2em] text-purple-300/70">
+            JJK
+          </span>
+        </div>
         <div className="text-xs text-white/60">
           Tudo aqui chama o backend (seguro).{" "}
           <span className="text-white/70">
@@ -52,7 +57,7 @@ export default function ActionBar({
                   onChangeTarget?.(e.target.value ? Number(e.target.value) : null)
                 }
                 disabled={!can || !hasTargets}
-                className="w-full h-10 px-3 text-white border outline-none rounded-xl bg-black/30 border-white/10"
+                className="w-full h-10 px-3 text-white border outline-none rounded-xl bg-black/30 border-white/10 focus:ring-2 focus:ring-purple-500/40"
               >
                 {!hasTargets && <option value="">(nenhum alvo)</option>}
                 {hasTargets && (
@@ -136,7 +141,7 @@ export default function ActionBar({
                 min={1}
                 max={20}
                 disabled={!can}
-                className="w-24 h-10 px-3 text-white border outline-none rounded-xl bg-black/30 border-white/10"
+                className="w-24 h-10 px-3 text-white border outline-none rounded-xl bg-black/30 border-white/10 focus:ring-2 focus:ring-purple-500/40"
               />
               <Button
                 variant="ghost"

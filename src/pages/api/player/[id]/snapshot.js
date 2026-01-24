@@ -1,5 +1,7 @@
 // src/pages/api/player/[id]/snapshot.js
 
+const { prisma } = require("../../../../database");
+const { getPlayerSnapshot } = require("../../../services/SnapshotService");
 import { prisma } from "../../../../database";
 import { getActiveCombatContext } from "../../../lib/combat";
 
@@ -16,23 +18,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: "invalid_character_id" });
     }
 
-    const character = await prisma.character.findUnique({
-      where: { id: characterId },
-      select: {
-        id: true,
-        name: true,
-        player_name: true,
-        current_hit_points: true,
-        max_hit_points: true,
-        is_dead: true,
-        standard_character_picture_url: true,
-      },
-    });
-
-    if (!character) {
+    const snapshot = await getPlayerSnapshot(prisma, characterId);
+    if (!snapshot) {
       return res.status(404).json({ ok: false, error: "character_not_found" });
     }
 
+    return res.status(200).json(snapshot);
     const cursedStats = await prisma.cursedStats.findUnique({
       where: { characterId },
     });

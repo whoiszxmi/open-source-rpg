@@ -403,12 +403,14 @@ export default function PlayerPage({ characterId, initial }) {
         <title>{ch?.name || "Jogador"} | Player</title>
       </Head>
 
-      <div className="min-h-screen text-white bg-zinc-950">
+      <div className="min-h-screen text-white bg-zinc-950 bg-[radial-gradient(circle_at_top,_rgba(79,70,229,0.25),_transparent_55%)]">
         <div className="max-w-6xl px-4 py-8 mx-auto">
           {/* Top bar */}
-          <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="text-2xl font-semibold tracking-tight">{ch?.name}</div>
+              <div className="text-2xl font-semibold tracking-tight">
+                {ch?.name}
+              </div>
               <div className="text-sm text-white/60">
                 HUD do jogador • {ch?.is_dead ? "☠️ Morto" : "🟢 Vivo"}
                 {combatId ? ` • Combate #${combatId}` : " • Sem combate ativo"}
@@ -421,16 +423,16 @@ export default function PlayerPage({ characterId, initial }) {
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
-                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-purple-400/40"
                 onClick={() => router.push("/play")}
               >
                 Trocar código
               </button>
 
               <button
-                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-purple-400/40"
                 onClick={refresh}
                 disabled={busy}
                 title="Atualiza HP/EA/PM/Status"
@@ -439,7 +441,7 @@ export default function PlayerPage({ characterId, initial }) {
               </button>
 
               <a
-                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-purple-400/40"
                 href={`/dice/${characterId}`}
                 target="_blank"
                 rel="noreferrer"
@@ -448,7 +450,7 @@ export default function PlayerPage({ characterId, initial }) {
               </a>
 
               <a
-                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-purple-400/40"
                 href={`/portrait/${characterId}`}
                 target="_blank"
                 rel="noreferrer"

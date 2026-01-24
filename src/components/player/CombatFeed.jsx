@@ -4,7 +4,7 @@ import { Card, CardHeader, CardContent } from "../ui/Card";
 export default function CombatFeed({ items = [] }) {
   const last = items.slice(-12).reverse();
   return (
-    <Card>
+    <Card className="border-white/10 bg-gradient-to-br from-zinc-950 via-slate-950/40 to-zinc-900">
       <CardHeader>
         <div className="text-white font-semibold">Feed</div>
         <div className="text-white/60 text-xs">
@@ -19,7 +19,7 @@ export default function CombatFeed({ items = [] }) {
             {last.map((it, idx) => (
               <div
                 key={idx}
-                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80"
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 shadow-[0_0_20px_rgba(99,102,241,0.08)]"
               >
                 {it}
               </div>

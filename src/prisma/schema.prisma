@@ -6,18 +6,48 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum Rank {
+  F
+  D_MINUS
+  D
+  D_PLUS
+  C_MINUS
+  C
+  C_PLUS
+  B_MINUS
+  B
+  B_PLUS
+  A_MINUS
+  A
+  A_PLUS
+  EX
+}
+
+enum StatGroupType {
+  PHYSICAL
+  JUJUTSU
+  MENTAL
+  EXTRA
+}
+
 model Character {
   id                             Int     @id @default(autoincrement())
   name                           String
   age                            Int?
   gender                         String?
   player_name                    String?
+  level                          Int     @default(1)
+  xp                             Int     @default(0)
   current_hit_points             Int     @default(0)
   max_hit_points                 Int     @default(0)
   current_picture                Int     @default(1)
   is_dead                        Boolean @default(false)
   standard_character_picture_url String?
   injured_character_picture_url  String?
+  statsPhysicalId                Int?
+  statsJujutsuId                 Int?
+  statsMentalId                  Int?
+  statsExtraId                   Int?
 
   created_at DateTime @default(now())
 
@@ -34,6 +64,14 @@ model Character {
   bindingVows      BindingVow[]
   domainState DomainState?
   combatStatuses CombatStatus[]
+  blackFlashState BlackFlashState?
+  blessings CharacterBlessing[]
+  curses CharacterCurse[]
+  statsPhysical StatGroup? @relation("CharacterStatsPhysical", fields: [statsPhysicalId], references: [id])
+  statsJujutsu StatGroup? @relation("CharacterStatsJujutsu", fields: [statsJujutsuId], references: [id])
+  statsMental StatGroup? @relation("CharacterStatsMental", fields: [statsMentalId], references: [id])
+  statsExtra StatGroup? @relation("CharacterStatsExtra", fields: [statsExtraId], references: [id])
+  statGroups StatGroup[] @relation("CharacterStatGroups")
 
 
   @@map("character")
@@ -103,6 +141,100 @@ model Config {
   value String?
 
   @@map("config")
+}
+
+model StatGroup {
+  id          Int           @id @default(autoincrement())
+  characterId Int
+  type        StatGroupType
+  totalPoints Int           @default(0)
+  rank        Rank          @default(F)
+
+  character Character @relation("CharacterStatGroups", fields: [characterId], references: [id])
+  stats     StatValue[]
+
+  @@index([characterId])
+  @@unique([characterId, type])
+  @@map("stat_group")
+}
+
+model StatValue {
+  id      Int    @id @default(autoincrement())
+  groupId Int
+  key     String
+  value   Int    @default(0)
+
+  group StatGroup @relation(fields: [groupId], references: [id])
+
+  @@index([groupId])
+  @@map("stat_value")
+}
+
+model Blessing {
+  id          Int    @id @default(autoincrement())
+  key         String @unique
+  name        String
+  rank        Rank
+  cost        Int
+  category    String
+  description String?
+  effects     Json
+
+  characters CharacterBlessing[]
+
+  @@map("blessing")
+}
+
+model Curse {
+  id          Int    @id @default(autoincrement())
+  key         String @unique
+  name        String
+  rank        Rank
+  reward      Int
+  category    String
+  description String?
+  effects     Json
+
+  characters CharacterCurse[]
+
+  @@map("curse")
+}
+
+model CharacterBlessing {
+  id         Int @id @default(autoincrement())
+  characterId Int
+  blessingId Int
+
+  character Character @relation(fields: [characterId], references: [id])
+  blessing Blessing @relation(fields: [blessingId], references: [id])
+
+  @@index([characterId])
+  @@index([blessingId])
+  @@map("character_blessing")
+}
+
+model CharacterCurse {
+  id         Int @id @default(autoincrement())
+  characterId Int
+  curseId    Int
+
+  character Character @relation(fields: [characterId], references: [id])
+  curse Curse @relation(fields: [curseId], references: [id])
+
+  @@index([characterId])
+  @@index([curseId])
+  @@map("character_curse")
+}
+
+model BlackFlashState {
+  id            Int @id @default(autoincrement())
+  characterId   Int @unique
+  activeTurns   Int @default(0)
+  nextThreshold Int @default(20)
+
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@map("black_flash_state")
 }
 
 // ===================================
