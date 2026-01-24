@@ -68,6 +68,12 @@ export const getServerSideProps = async ({ params }) => {
         orderBy: { id: "asc" },
       });
     }
+  } else {
+    targets = await prisma.character.findMany({
+      where: { id: { not: characterId } },
+      select: { id: true, name: true, is_dead: true },
+      orderBy: { id: "asc" },
+    });
   }
 
   return {
@@ -119,6 +125,13 @@ export default function PlayerPage({ characterId, initial }) {
           targets: data?.targets || [],
           combatId: data?.combatId || null,
           combat: data?.combat || null,
+          techniques:
+            data?.techniques ??
+            prev?.techniques ??
+            initial?.techniques ??
+            [],
+          targets:
+            data?.targets ?? prev?.targets ?? initial?.targets ?? [],
         }));
       }
     } catch {
@@ -196,6 +209,7 @@ export default function PlayerPage({ characterId, initial }) {
       if (selectedTargetId != null) setSelectedTargetId(null);
       return;
     }
+    if (!targets.length) return;
     const selectedExists = targets.some(
       (t) => Number(t.id) === Number(selectedTargetId),
     );

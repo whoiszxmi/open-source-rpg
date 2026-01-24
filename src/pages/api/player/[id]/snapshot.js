@@ -68,6 +68,12 @@ export default async function handler(req, res) {
           orderBy: { id: "asc" },
         });
       }
+    } else {
+      targets = await prisma.character.findMany({
+        where: { id: { not: characterId } },
+        select: { id: true, name: true, is_dead: true },
+        orderBy: { id: "asc" },
+      });
     }
 
     // evita problemas com Date/BigInt etc
