@@ -31,6 +31,9 @@ export default function Play() {
       <Head>
         <title>Entrar | Jogador</title>
       </Head>
+      <div className="p-6 rounded-2xl bg-red-500 text-white text-2xl">
+        TAILWIND OK
+      </div>
 
       <div className="min-h-screen bg-zinc-950 text-white">
         <div className="mx-auto max-w-lg px-4 py-14">
