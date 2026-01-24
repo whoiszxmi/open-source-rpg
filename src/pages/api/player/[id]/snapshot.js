@@ -1,6 +1,7 @@
 // src/pages/api/player/[id]/snapshot.js
 
-const { prisma } = require("../../../../database");
+import { prisma } from "../../../../database";
+import { getActiveCombatContext } from "../../../lib/combat";
 
 export default async function handler(req, res) {
   try {
@@ -45,7 +46,60 @@ export default async function handler(req, res) {
       orderBy: [{ kind: "asc" }, { key: "asc" }],
     });
 
+    const techniques = await prisma.innateTechnique.findMany({
+      where: { characterId },
+      orderBy: { id: "asc" },
+    });
+
+    const { combatId, participants } = await getActiveCombatContext(
+      prisma,
+      characterId,
+    );
+
+    let targets = [];
+    if (participants.length > 0) {
+      const targetIds = participants.filter(
+        (id) => Number(id) !== Number(characterId),
+      );
+      if (targetIds.length > 0) {
+        targets = await prisma.character.findMany({
+          where: { id: { in: targetIds } },
+          select: { id: true, name: true, is_dead: true },
+          orderBy: { id: "asc" },
+        });
+      }
+    }
+
     // evita problemas com Date/BigInt etc
+    let combat = null;
+    if (combatId) {
+      const combatRow = await prisma.combat.findUnique({
+        where: { id: combatId },
+        select: {
+          id: true,
+          isActive: true,
+          participants: true,
+          roundNumber: true,
+          turnIndex: true,
+          turnOrder: true,
+          actedThisRound: true,
+        },
+      });
+
+      if (combatRow) {
+        const order = Array.isArray(combatRow.turnOrder)
+          ? combatRow.turnOrder
+          : null;
+        const currentActorId = order
+          ? Number(order[combatRow.turnIndex || 0])
+          : null;
+        combat = {
+          ...combatRow,
+          currentActorId,
+        };
+      }
+    }
+
     const payload = {
       ok: true,
       characterId,
@@ -53,6 +107,10 @@ export default async function handler(req, res) {
       cursedStats: cursedStats ? JSON.parse(JSON.stringify(cursedStats)) : null,
       domainState: domainState ? JSON.parse(JSON.stringify(domainState)) : null,
       statuses: JSON.parse(JSON.stringify(statuses || [])),
+      techniques: JSON.parse(JSON.stringify(techniques || [])),
+      targets: JSON.parse(JSON.stringify(targets || [])),
+      combatId: combatId || null,
+      combat: combat ? JSON.parse(JSON.stringify(combat)) : null,
     };
 
     return res.status(200).json(payload);

@@ -357,39 +357,58 @@ app.post("/combat/resolve", async (req, res) => {
     const times = body.times ? Number(body.times) : 1;
     const baseDamage = body.baseDamage != null ? Number(body.baseDamage) : 5;
 
-    // ✅ TRAVA DE TURNO (se combatId presente)
-    if (combatId) {
-      const combat = await prisma.combat.findUnique({
-        where: { id: combatId },
-        select: { turnOrder: true, turnIndex: true, actedThisRound: true },
-      });
-
-      const order = Array.isArray(combat?.turnOrder) ? combat.turnOrder : null;
-      if (!order || order.length === 0) {
-        return res.status(400).json({ error: "turnOrder_not_set" });
-      }
-
-      const currentActorId = Number(order[Number(combat.turnIndex) || 0]);
-      if (currentActorId !== attackerId) {
-        return res.status(400).json({
-          error: "not_your_turn",
-          details: `Agora é o turno do personagem ${currentActorId}`,
-          currentActorId,
-        });
-      }
-
-      const acted = Array.isArray(combat.actedThisRound)
-        ? combat.actedThisRound
-        : [];
-      if (acted.includes(attackerId)) {
-        return res.status(400).json({ error: "already_acted_this_round" });
-      }
-
-      await prisma.combat.update({
-        where: { id: combatId },
-        data: { actedThisRound: [...acted, attackerId] },
+    if (!combatId) {
+      return res.status(400).json({
+        error: "missing_combatId",
+        details: "Combate inválido ou ausente.",
       });
     }
+
+    const combat = await prisma.combat.findUnique({
+      where: { id: combatId },
+      select: {
+        participants: true,
+        turnOrder: true,
+        turnIndex: true,
+        actedThisRound: true,
+      },
+    });
+    if (!combat) {
+      return res.status(404).json({ error: "combat_not_found" });
+    }
+
+    const participants = Array.isArray(combat.participants)
+      ? combat.participants
+      : [];
+    if (!participants.includes(attackerId) || !participants.includes(targetId)) {
+      return res.status(400).json({ error: "combat_participant_required" });
+    }
+
+    const order = Array.isArray(combat.turnOrder) ? combat.turnOrder : null;
+    if (!order || order.length === 0) {
+      return res.status(400).json({ error: "turnOrder_not_set" });
+    }
+
+    const currentActorId = Number(order[Number(combat.turnIndex) || 0]);
+    if (currentActorId !== attackerId) {
+      return res.status(400).json({
+        error: "not_your_turn",
+        details: `Agora é o turno do personagem ${currentActorId}`,
+        currentActorId,
+      });
+    }
+
+    const acted = Array.isArray(combat.actedThisRound)
+      ? combat.actedThisRound
+      : [];
+    if (acted.includes(attackerId)) {
+      return res.status(400).json({ error: "already_acted_this_round" });
+    }
+
+    await prisma.combat.update({
+      where: { id: combatId },
+      data: { actedThisRound: [...acted, attackerId] },
+    });
 
     const attacker = await prisma.character.findUnique({
       where: { id: attackerId },
