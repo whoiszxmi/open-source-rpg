@@ -8,23 +8,69 @@ export default function ActionBar({
   onEmotionalBoost,
   onAttack,
   busy,
+
+  // ✅ alvo
+  targets = [],
+  selectedTargetId = null,
+  onChangeTarget,
 }) {
   const [reinforce, setReinforce] = useState(2);
   const [boost, setBoost] = useState(5);
 
   const can = useMemo(() => !busy, [busy]);
 
+  const hasTargets = (targets || []).length > 0;
+
   return (
     <Card>
       <CardHeader>
-        <div className="text-white font-semibold">Ações rápidas</div>
-        <div className="text-white/60 text-xs">
+        <div className="font-semibold text-white">Ações rápidas</div>
+        <div className="text-xs text-white/60">
           Tudo aqui chama o backend (seguro).
         </div>
       </CardHeader>
 
       <CardContent>
         <div className="space-y-3">
+          {/* 🎯 Seleção de alvo */}
+          <div className="p-3 border rounded-2xl border-white/10 bg-white/5">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-white">Alvo</div>
+              <div className="text-xs text-white/60">
+                {hasTargets ? "Selecione para atacar" : "Sem alvos"}
+              </div>
+            </div>
+
+            <div className="mt-2">
+              <select
+                value={selectedTargetId ?? ""}
+                onChange={(e) =>
+                  onChangeTarget?.(e.target.value ? Number(e.target.value) : null)
+                }
+                disabled={!can || !hasTargets}
+                className="w-full h-10 px-3 text-white border outline-none rounded-xl bg-black/30 border-white/10"
+              >
+                {!hasTargets && <option value="">(nenhum alvo)</option>}
+                {hasTargets && (
+                  <>
+                    <option value="">(selecione)</option>
+                    {targets.map((t) => (
+                      <option key={t.id} value={t.id} disabled={t.is_dead}>
+                        {t.name} {t.is_dead ? "☠️" : ""}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+            </div>
+
+            <div className="mt-2 text-xs text-white/50">
+              A técnica é selecionada na lista{" "}
+              <span className="text-white/70">Técnicas Inatas</span> abaixo.
+            </div>
+          </div>
+
+          {/* 🎲 Rolls */}
           <div className="flex gap-2">
             <Button
               className="flex-1"
@@ -43,12 +89,11 @@ export default function ActionBar({
             </Button>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+          {/* 💪 Reforço */}
+          <div className="p-3 border rounded-2xl border-white/10 bg-white/5">
             <div className="flex items-center justify-between">
-              <div className="text-white text-sm font-medium">
-                Reforçar corpo
-              </div>
-              <div className="text-white/60 text-xs">
+              <div className="text-sm font-medium text-white">Reforçar corpo</div>
+              <div className="text-xs text-white/60">
                 Intensidade: {reinforce}
               </div>
             </div>
@@ -59,6 +104,7 @@ export default function ActionBar({
               value={reinforce}
               onChange={(e) => setReinforce(Number(e.target.value))}
               className="w-full mt-2"
+              disabled={!can}
             />
             <div className="mt-2">
               <Button
@@ -71,22 +117,22 @@ export default function ActionBar({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+          {/* 🔥 Boost emocional */}
+          <div className="p-3 border rounded-2xl border-white/10 bg-white/5">
             <div className="flex items-center justify-between">
-              <div className="text-white text-sm font-medium">
-                Boost emocional
-              </div>
-              <div className="text-white/60 text-xs">Valor</div>
+              <div className="text-sm font-medium text-white">Boost emocional</div>
+              <div className="text-xs text-white/60">Valor</div>
             </div>
 
-            <div className="mt-2 flex gap-2">
+            <div className="flex gap-2 mt-2">
               <input
                 value={boost}
                 onChange={(e) => setBoost(Number(e.target.value))}
                 type="number"
                 min={1}
                 max={20}
-                className="h-10 w-24 rounded-xl bg-black/30 border border-white/10 text-white px-3 outline-none"
+                disabled={!can}
+                className="w-24 h-10 px-3 text-white border outline-none rounded-xl bg-black/30 border-white/10"
               />
               <Button
                 variant="ghost"
@@ -98,19 +144,19 @@ export default function ActionBar({
             </div>
           </div>
 
+          {/* ⚔️ Atacar real */}
           <div className="flex gap-2">
             <Button
               className="flex-1"
-              variant="ghost"
-              disabled={!can}
-              onClick={() => onAttack?.()}
-              title="Você vai escolher alvo depois (placeholder)."
+              disabled={!can || !selectedTargetId}
+              onClick={() => onAttack?.({})}
+              title={!selectedTargetId ? "Selecione um alvo primeiro." : "Ataca o alvo selecionado"}
             >
-              Atacar (placeholder)
+              Atacar
             </Button>
           </div>
 
-          <div className="text-white/50 text-xs">
+          <div className="text-xs text-white/50">
             Dica: deixe a aba <span className="text-white/70">/dice/[id]</span>{" "}
             aberta pra ver o dado animado.
           </div>
