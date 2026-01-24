@@ -9,6 +9,13 @@ O objetivo principal é criar um app simples, porém funcional, que sirva para q
 
 Quando o projeto estiver minimamente finalizado, um guia será disponibilizado para leigos sobre como fazer o projeto funcionar.
 
+### Desenvolvimento rápido
+Após instalar as dependências, gere o Prisma Client antes de subir o servidor:
+
+```bash
+npx prisma generate
+```
+
 ### Recursos
 - ✔️ Ficha de personagem
 - ✔️ Painel do mestre para manipular o sistema

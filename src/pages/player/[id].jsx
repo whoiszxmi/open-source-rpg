@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import socket, { joinDiceRoom, joinPortraitRoom } from "../../utils/socket";
 import { prisma } from "../../database";
 import { postJSON } from "../../lib/api";
+import { getActiveCombatContext } from "../../lib/combat";
 
 import PlayerHUD from "../../components/player/PlayerHUD";
 import ActionBar from "../../components/player/ActionBar";
@@ -50,12 +51,24 @@ export const getServerSideProps = async ({ params }) => {
     orderBy: { id: "asc" },
   });
 
-  // ✅ alvos simples (depois: só quem está no combate)
-  const targets = await prisma.character.findMany({
-    where: { id: { not: characterId } },
-    select: { id: true, name: true, is_dead: true },
-    orderBy: { id: "asc" },
-  });
+  const { combatId, participants } = await getActiveCombatContext(
+    prisma,
+    characterId,
+  );
+
+  let targets = [];
+  if (participants.length > 0) {
+    const targetIds = participants.filter(
+      (id) => Number(id) !== Number(characterId),
+    );
+    if (targetIds.length > 0) {
+      targets = await prisma.character.findMany({
+        where: { id: { in: targetIds } },
+        select: { id: true, name: true, is_dead: true },
+        orderBy: { id: "asc" },
+      });
+    }
+  }
 
   return {
     props: {
@@ -67,6 +80,7 @@ export const getServerSideProps = async ({ params }) => {
         statuses: JSON.parse(JSON.stringify(statuses || [])),
         techniques: JSON.parse(JSON.stringify(techniques || [])),
         targets: JSON.parse(JSON.stringify(targets || [])),
+        combatId: combatId || null,
       },
     },
   };
@@ -78,6 +92,8 @@ export default function PlayerPage({ characterId, initial }) {
   const [snapshot, setSnapshot] = useState(initial);
   const [feed, setFeed] = useState([]);
   const [busy, setBusy] = useState(false);
+  const combatId = snapshot?.combatId || null;
+  const combatState = snapshot?.combat || null;
 
   // ✅ alvo + técnica selecionados
   const [selectedTargetId, setSelectedTargetId] = useState(
@@ -99,14 +115,16 @@ export default function PlayerPage({ characterId, initial }) {
         setSnapshot((prev) => ({
           ...prev,
           ...data,
-          techniques: prev?.techniques || initial?.techniques || [],
-          targets: prev?.targets || initial?.targets || [],
+          techniques: data?.techniques || [],
+          targets: data?.targets || [],
+          combatId: data?.combatId || null,
+          combat: data?.combat || null,
         }));
       }
     } catch {
       // silencioso
     }
-  }, [characterId, initial?.techniques, initial?.targets]);
+  }, [characterId]);
 
   // join rooms + listeners
   useEffect(() => {
@@ -171,6 +189,22 @@ export default function PlayerPage({ characterId, initial }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const targets = snapshot?.targets || [];
+    if (!targets.length) {
+      if (selectedTargetId != null) setSelectedTargetId(null);
+      return;
+    }
+    const selectedExists = targets.some(
+      (t) => Number(t.id) === Number(selectedTargetId),
+    );
+    if (!selectedExists) {
+      setSelectedTargetId(
+        targets.find((t) => !t.is_dead)?.id || targets[0]?.id || null,
+      );
+    }
+  }, [snapshot?.targets, selectedTargetId]);
 
   if (!characterId || !initial) {
     return (
@@ -277,15 +311,39 @@ export default function PlayerPage({ characterId, initial }) {
 
   // ✅ ataque real: usa selectedTechniqueId (se tiver)
   async function doAttack({ targetId, techniqueId, jujutsu } = {}) {
+    if (!combatId) {
+      setFeed((f) =>
+        [
+          ...f,
+          "❌ Nenhum combate ativo. Entre em um combate para atacar.",
+        ].slice(-50),
+      );
+      return;
+    }
     const tId = targetId ?? selectedTargetId;
     if (!tId) {
       setFeed((f) => [...f, "❌ Selecione um alvo antes de atacar."].slice(-50));
       return;
     }
 
+    const target = (snapshot.targets || []).find((x) => Number(x.id) === Number(tId));
+    const tech = (snapshot.techniques || []).find(
+      (x) => Number(x.id) === Number(techniqueId ?? selectedTechniqueId),
+    );
+
+    setFeed((f) =>
+      [
+        ...f,
+        `⚔️ Atacando ${target ? target.name : `#${tId}`} ${
+          tech ? `com técnica: ${tech.name}` : "(ataque básico)"
+        }`,
+      ].slice(-50),
+    );
+
     setBusy(true);
     try {
       const payload = await postJSON("/combat/resolve", {
+        combatId,
         attacker_id: characterId,
         target_id: Number(tId),
         max_number: 20,
@@ -315,6 +373,11 @@ export default function PlayerPage({ characterId, initial }) {
       }
 
       return payload;
+    } catch (e) {
+      setFeed((f) =>
+        [...f, `❌ Falha no ataque: ${e?.message || String(e)}`].slice(-50),
+      );
+      throw e;
     } finally {
       setBusy(false);
     }
@@ -326,27 +389,36 @@ export default function PlayerPage({ characterId, initial }) {
         <title>{ch?.name || "Jogador"} | Player</title>
       </Head>
 
-      <div className="min-h-screen text-white bg-zinc-950">
+      <div className="min-h-screen text-white bg-zinc-950 bg-[radial-gradient(circle_at_top,_rgba(79,70,229,0.25),_transparent_55%)]">
         <div className="max-w-6xl px-4 py-8 mx-auto">
           {/* Top bar */}
-          <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex flex-col gap-4 mb-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="text-2xl font-semibold tracking-tight">{ch?.name}</div>
+              <div className="text-2xl font-semibold tracking-tight">
+                {ch?.name}
+              </div>
               <div className="text-sm text-white/60">
                 HUD do jogador • {ch?.is_dead ? "☠️ Morto" : "🟢 Vivo"}
+                {combatId ? ` • Combate #${combatId}` : " • Sem combate ativo"}
+                {combatState?.roundNumber != null
+                  ? ` • Rodada ${combatState.roundNumber}`
+                  : ""}
+                {combatState?.currentActorId
+                  ? ` • Turno #${combatState.currentActorId}`
+                  : ""}
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
-                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-purple-400/40"
                 onClick={() => router.push("/play")}
               >
                 Trocar código
               </button>
 
               <button
-                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-purple-400/40"
                 onClick={refresh}
                 disabled={busy}
                 title="Atualiza HP/EA/PM/Status"
@@ -355,7 +427,7 @@ export default function PlayerPage({ characterId, initial }) {
               </button>
 
               <a
-                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-purple-400/40"
                 href={`/dice/${characterId}`}
                 target="_blank"
                 rel="noreferrer"
@@ -364,7 +436,7 @@ export default function PlayerPage({ characterId, initial }) {
               </a>
 
               <a
-                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                className="px-3 py-2 text-sm border rounded-xl border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:border-purple-400/40"
                 href={`/portrait/${characterId}`}
                 target="_blank"
                 rel="noreferrer"
@@ -406,33 +478,37 @@ export default function PlayerPage({ characterId, initial }) {
                 targets={snapshot.targets || []}
                 selectedTargetId={selectedTargetId}
                 onChangeTarget={setSelectedTargetId}
+                combatId={combatId}
+                techniques={snapshot.techniques || []}
+                selectedTechniqueId={selectedTechniqueId}
+                onChangeTechnique={setSelectedTechniqueId}
               />
 
-<TechniqueList
-  techniques={snapshot.techniques}
-  busy={busy}
-  selectedTechniqueId={selectedTechniqueId}
-  onSelect={(t) => {
-    // ✅ atualizar seleção
-    setSelectedTechniqueId(t ? t.id : null);
+              <TechniqueList
+                techniques={snapshot.techniques}
+                busy={busy}
+                selectedTechniqueId={selectedTechniqueId}
+                onSelect={(t) => {
+                  // ✅ atualizar seleção
+                  setSelectedTechniqueId(t ? t.id : null);
 
-    // ✅ feed bonitinho
-    if (!t) {
-      setFeed((f) =>
-        [...f, "🧼 Técnica limpa: próximo ataque será básico."].slice(-50),
-      );
-      return;
-    }
+                  // ✅ feed bonitinho
+                  if (!t) {
+                    setFeed((f) =>
+                      [...f, "🧼 Técnica limpa: próximo ataque será básico."].slice(-50),
+                    );
+                    return;
+                  }
 
-    setFeed((f) =>
-      [
-        ...f,
-        `🌀 Técnica selecionada: ${t.name} (custo ${t.cost} EA)`,
-        "➡️ Agora clique em Atacar para usar contra o alvo selecionado.",
-      ].slice(-50),
-    );
-  }}
-/>
+                  setFeed((f) =>
+                    [
+                      ...f,
+                      `🌀 Técnica selecionada: ${t.name} (custo ${t.cost} EA)`,
+                      "➡️ Agora clique em Atacar para usar contra o alvo selecionado.",
+                    ].slice(-50),
+                  );
+                }}
+              />
 
 
               <CombatFeed items={feed} />

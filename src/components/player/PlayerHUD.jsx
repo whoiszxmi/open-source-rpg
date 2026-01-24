@@ -38,10 +38,12 @@ export default function PlayerHUD({
     .slice(0, 12);
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="relative overflow-hidden border-white/10 bg-gradient-to-br from-zinc-950 via-purple-950/40 to-zinc-900">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.25),_transparent_55%)]" />
+      <CardHeader className="relative">
         <div className="flex items-center gap-3">
-          <div className="h-12 w-12 rounded-xl bg-white/10 overflow-hidden">
+          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-purple-500/30 to-cyan-500/20 p-[1px]">
+            <div className="h-full w-full rounded-xl bg-black/60 overflow-hidden">
             {character?.standard_character_picture_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -51,9 +53,10 @@ export default function PlayerHUD({
               />
             ) : null}
           </div>
+          </div>
 
           <div className="min-w-0">
-            <div className="text-white font-semibold truncate">
+            <div className="text-white font-semibold tracking-wide truncate">
               {character?.name || "Jogador"}
             </div>
             <div className="text-white/60 text-xs">
@@ -81,7 +84,7 @@ export default function PlayerHUD({
         </div>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="relative">
         <div className="space-y-4">
           {/* HP */}
           <div>
