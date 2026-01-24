@@ -15,6 +15,12 @@ if (!databaseUrl) {
 // Prisma 7 exige adapter OU accelerateUrl
 const adapter = new PrismaMariaDb(databaseUrl);
 
-const prisma = new PrismaClient({ adapter });
+const globalForPrisma = globalThis;
+
+const prisma = globalForPrisma.prisma || new PrismaClient({ adapter });
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
 
 module.exports = { prisma };

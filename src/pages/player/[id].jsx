@@ -283,6 +283,20 @@ export default function PlayerPage({ characterId, initial }) {
       return;
     }
 
+    const target = (snapshot.targets || []).find((x) => Number(x.id) === Number(tId));
+    const tech = (snapshot.techniques || []).find(
+      (x) => Number(x.id) === Number(techniqueId ?? selectedTechniqueId),
+    );
+
+    setFeed((f) =>
+      [
+        ...f,
+        `⚔️ Atacando ${target ? target.name : `#${tId}`} ${
+          tech ? `com técnica: ${tech.name}` : "(ataque básico)"
+        }`,
+      ].slice(-50),
+    );
+
     setBusy(true);
     try {
       const payload = await postJSON("/combat/resolve", {
@@ -315,6 +329,11 @@ export default function PlayerPage({ characterId, initial }) {
       }
 
       return payload;
+    } catch (e) {
+      setFeed((f) =>
+        [...f, `❌ Falha no ataque: ${e?.message || String(e)}`].slice(-50),
+      );
+      throw e;
     } finally {
       setBusy(false);
     }
@@ -406,33 +425,36 @@ export default function PlayerPage({ characterId, initial }) {
                 targets={snapshot.targets || []}
                 selectedTargetId={selectedTargetId}
                 onChangeTarget={setSelectedTargetId}
+                techniques={snapshot.techniques || []}
+                selectedTechniqueId={selectedTechniqueId}
+                onChangeTechnique={setSelectedTechniqueId}
               />
 
-<TechniqueList
-  techniques={snapshot.techniques}
-  busy={busy}
-  selectedTechniqueId={selectedTechniqueId}
-  onSelect={(t) => {
-    // ✅ atualizar seleção
-    setSelectedTechniqueId(t ? t.id : null);
+              <TechniqueList
+                techniques={snapshot.techniques}
+                busy={busy}
+                selectedTechniqueId={selectedTechniqueId}
+                onSelect={(t) => {
+                  // ✅ atualizar seleção
+                  setSelectedTechniqueId(t ? t.id : null);
 
-    // ✅ feed bonitinho
-    if (!t) {
-      setFeed((f) =>
-        [...f, "🧼 Técnica limpa: próximo ataque será básico."].slice(-50),
-      );
-      return;
-    }
+                  // ✅ feed bonitinho
+                  if (!t) {
+                    setFeed((f) =>
+                      [...f, "🧼 Técnica limpa: próximo ataque será básico."].slice(-50),
+                    );
+                    return;
+                  }
 
-    setFeed((f) =>
-      [
-        ...f,
-        `🌀 Técnica selecionada: ${t.name} (custo ${t.cost} EA)`,
-        "➡️ Agora clique em Atacar para usar contra o alvo selecionado.",
-      ].slice(-50),
-    );
-  }}
-/>
+                  setFeed((f) =>
+                    [
+                      ...f,
+                      `🌀 Técnica selecionada: ${t.name} (custo ${t.cost} EA)`,
+                      "➡️ Agora clique em Atacar para usar contra o alvo selecionado.",
+                    ].slice(-50),
+                  );
+                }}
+              />
 
 
               <CombatFeed items={feed} />
