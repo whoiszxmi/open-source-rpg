@@ -48,8 +48,14 @@ model Character {
   statsJujutsuId                 Int?
   statsMentalId                  Int?
   statsExtraId                   Int?
+  origin                         String? @db.VarChar(80)
+  personalityTag                 String? @db.VarChar(60)
+  bindingVow                     String? @db.VarChar(240)
+  goal                           String? @db.VarChar(240)
 
-  created_at DateTime @default(now())
+  creationStep       Int      @default(0)
+  isCreationComplete Boolean  @default(false)
+  created_at         DateTime @default(now())
 
   attributes CharacterAttributes[]
   skills     CharacterSkills[]
@@ -62,17 +68,18 @@ model Character {
   cursedStats      CursedStats?
   innateTechniques InnateTechnique[]
   bindingVows      BindingVow[]
-  domainState DomainState?
-  combatStatuses CombatStatus[]
-  blackFlashState BlackFlashState?
-  blessings CharacterBlessing[]
-  curses CharacterCurse[]
-  statsPhysical StatGroup? @relation("CharacterStatsPhysical", fields: [statsPhysicalId], references: [id])
-  statsJujutsu StatGroup? @relation("CharacterStatsJujutsu", fields: [statsJujutsuId], references: [id])
-  statsMental StatGroup? @relation("CharacterStatsMental", fields: [statsMentalId], references: [id])
-  statsExtra StatGroup? @relation("CharacterStatsExtra", fields: [statsExtraId], references: [id])
-  statGroups StatGroup[] @relation("CharacterStatGroups")
-
+  domainState      DomainState?
+  combatStatuses   CombatStatus[]
+  blackFlashState  BlackFlashState?
+  blessings        CharacterBlessing[]
+  curses           CharacterCurse[]
+  statsPhysical    StatGroup?          @relation("CharacterStatsPhysical", fields: [statsPhysicalId], references: [id])
+  statsJujutsu     StatGroup?          @relation("CharacterStatsJujutsu", fields: [statsJujutsuId], references: [id])
+  statsMental      StatGroup?          @relation("CharacterStatsMental", fields: [statsMentalId], references: [id])
+  statsExtra       StatGroup?          @relation("CharacterStatsExtra", fields: [statsExtraId], references: [id])
+  statGroups       StatGroup[]         @relation("CharacterStatGroups")
+  statGroup        StatGroup?          @relation(fields: [statGroupId], references: [id])
+  statGroupId      Int?
 
   @@map("character")
 }
@@ -150,11 +157,16 @@ model StatGroup {
   totalPoints Int           @default(0)
   rank        Rank          @default(F)
 
-  character Character @relation("CharacterStatGroups", fields: [characterId], references: [id])
-  stats     StatValue[]
+  character  Character   @relation("CharacterStatGroups", fields: [characterId], references: [id])
+  stats      StatValue[]
+  characters Character[]
+  characters Character[]
+  characters Character[]
+  characters Character[]
+  characters Character[]
 
-  @@index([characterId])
   @@unique([characterId, type])
+  @@index([characterId])
   @@map("stat_group")
 }
 
@@ -171,8 +183,8 @@ model StatValue {
 }
 
 model Blessing {
-  id          Int    @id @default(autoincrement())
-  key         String @unique
+  id          Int     @id @default(autoincrement())
+  key         String  @unique
   name        String
   rank        Rank
   cost        Int
@@ -186,8 +198,8 @@ model Blessing {
 }
 
 model Curse {
-  id          Int    @id @default(autoincrement())
-  key         String @unique
+  id          Int     @id @default(autoincrement())
+  key         String  @unique
   name        String
   rank        Rank
   reward      Int
@@ -201,12 +213,12 @@ model Curse {
 }
 
 model CharacterBlessing {
-  id         Int @id @default(autoincrement())
+  id          Int @id @default(autoincrement())
   characterId Int
-  blessingId Int
+  blessingId  Int
 
   character Character @relation(fields: [characterId], references: [id])
-  blessing Blessing @relation(fields: [blessingId], references: [id])
+  blessing  Blessing  @relation(fields: [blessingId], references: [id])
 
   @@index([characterId])
   @@index([blessingId])
@@ -214,12 +226,12 @@ model CharacterBlessing {
 }
 
 model CharacterCurse {
-  id         Int @id @default(autoincrement())
+  id          Int @id @default(autoincrement())
   characterId Int
-  curseId    Int
+  curseId     Int
 
   character Character @relation(fields: [characterId], references: [id])
-  curse Curse @relation(fields: [curseId], references: [id])
+  curse     Curse     @relation(fields: [curseId], references: [id])
 
   @@index([characterId])
   @@index([curseId])
@@ -284,11 +296,11 @@ model BindingVow {
 }
 
 model DomainState {
-  id             Int      @id @default(autoincrement())
-  characterId    Int      @unique
-  type           String   // "EXPANSION" | "SIMPLE_DOMAIN" | "WICKER_BASKET" | "AMPLIFICATION"
+  id             Int     @id @default(autoincrement())
+  characterId    Int     @unique
+  type           String // "EXPANSION" | "SIMPLE_DOMAIN" | "WICKER_BASKET" | "AMPLIFICATION"
   turnsRemaining Int
-  sureHitActive  Boolean  @default(false)
+  sureHitActive  Boolean @default(false)
   notes          String?
 
   created_at DateTime @default(now())
@@ -300,14 +312,14 @@ model DomainState {
 }
 
 model CombatStatus {
-  id             Int      @id @default(autoincrement())
+  id             Int     @id @default(autoincrement())
   characterId    Int
-  sourceId       Int?     // quem aplicou (opcional)
-  key            String   // ex: "BURN", "BLEED", "STUN", "TECH_SEAL"
-  kind           String   // "BUFF" | "DEBUFF"
-  value          Int      @default(0)  // intensidade
-  stacks         Int      @default(1)
-  turnsRemaining Int      @default(1)
+  sourceId       Int? // quem aplicou (opcional)
+  key            String // ex: "BURN", "BLEED", "STUN", "TECH_SEAL"
+  kind           String // "BUFF" | "DEBUFF"
+  value          Int     @default(0) // intensidade
+  stacks         Int     @default(1)
+  turnsRemaining Int     @default(1)
   note           String?
 
   created_at DateTime @default(now())
@@ -328,16 +340,15 @@ model Combat {
   participants Json? // [1,2,3,4]
 
   // ✅ turno/rodada
-  roundNumber   Int   @default(1)
-  turnIndex     Int   @default(0) // índice do participante atual na order
-  turnOrder     Json? // [ids ordenados por iniciativa]
+  roundNumber    Int   @default(1)
+  turnIndex      Int   @default(0) // índice do participante atual na order
+  turnOrder      Json? // [ids ordenados por iniciativa]
   actedThisRound Json? // [ids que já agiram nesta rodada]
 
   logs CombatLog[]
 
   @@map("combat")
 }
-
 
 model CombatLog {
   id         Int      @id @default(autoincrement())
