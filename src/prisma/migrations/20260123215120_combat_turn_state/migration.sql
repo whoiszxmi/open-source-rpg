@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE `combat` ADD COLUMN `actedThisRound` JSON NULL,
+    ADD COLUMN `roundNumber` INTEGER NOT NULL DEFAULT 1,
+    ADD COLUMN `turnIndex` INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN `turnOrder` JSON NULL;

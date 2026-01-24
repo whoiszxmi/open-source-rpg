@@ -1,39 +1,726 @@
-require('dotenv').config();
+require("dotenv").config();
 
-const app = require('express')();
-const server = require('http').Server(app);
-const io = require('socket.io')(server);
-const next = require('next');
+const express = require("express");
+const http = require("http");
+const socketio = require("socket.io");
+const next = require("next");
 
-const dev = process.env.NODE_ENV !== 'production';
+// Ajuste paths se necessário
+const { prisma } = require("./database");
+const { generateRandomNumber } = require("./utils");
+
+// Jujutsu
+const engine = require("./system/jujutsu/engine");
+const { resolveSureHit } = require("./system/jujutsu/domainEngine");
+const DomainService = require("./services/DomainService");
+
+// Status
+const CombatStatusService = require("./services/CombatStatusService");
+
+// Routes
+const jujutsuRoutes = require("./routes/jujutsuRoutes");
+const statusRoutes = require("./routes/statusRoutes");
+const combatRoutes = require("./routes/combatRoutes");
+
+const dev = process.env.NODE_ENV !== "production";
+
+const app = express();
+app.use(express.json());
+
+// Rotas
+app.use("/jujutsu", jujutsuRoutes);
+app.use("/status", statusRoutes);
+app.use("/combat", combatRoutes);
+
+// Next + Socket
+const server = http.Server(app);
+const io = socketio(server, { cors: { origin: "*" } });
 
 const nextApp = next({ dev });
 const nextHandler = nextApp.getRequestHandler();
 
-io.on('connect', socket => {
-    socket.on('room:join', roomName => {
-        return socket.join(roomName);
+// ===== Helpers =====
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function toInt(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
+function pickSkillValue(character, names) {
+  if (!character || !character.skills) return null;
+  for (const wanted of names) {
+    const found = character.skills.find(
+      (cs) => cs?.skill?.name?.toLowerCase() === wanted.toLowerCase(),
+    );
+    if (found && found.value != null) {
+      const n = toInt(found.value, NaN);
+      if (!Number.isNaN(n)) return n;
+    }
+  }
+  return null;
+}
+
+function pickAttrValue(character, names) {
+  if (!character || !character.attributes) return null;
+  for (const wanted of names) {
+    const found = character.attributes.find(
+      (ca) => ca?.attribute?.name?.toLowerCase() === wanted.toLowerCase(),
+    );
+    if (found && found.value != null) {
+      const n = toInt(found.value, NaN);
+      if (!Number.isNaN(n)) return n;
+    }
+  }
+  return null;
+}
+
+function getDefenseScore(targetCharacter) {
+  const skillDefense = pickSkillValue(targetCharacter, [
+    "Defesa",
+    "Defense",
+    "Esquiva",
+    "Dodge",
+  ]);
+  if (skillDefense != null) return skillDefense;
+
+  const attrDefense = pickAttrValue(targetCharacter, [
+    "Agilidade",
+    "Destreza",
+    "Dexterity",
+  ]);
+  if (attrDefense != null) return attrDefense;
+
+  return 10;
+}
+
+// Tags simples na technique.effect (opcional): "STATUS:BURN:2:3" (key:value:turns)
+// Ex: "STATUS:BURN:2:3; STATUS:STUN:1:1"
+function parseStatusTags(effectText) {
+  const out = [];
+  const txt = (effectText || "").toString();
+  const parts = txt
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  for (const p of parts) {
+    const up = p.toUpperCase();
+    if (!up.startsWith("STATUS:")) continue;
+    const raw = p.substring("STATUS:".length).trim();
+    const seg = raw.split(":").map((s) => s.trim());
+    const key = (seg[0] || "").toUpperCase();
+    const value = seg[1] != null ? toInt(seg[1], 1) : 1;
+    const turns = seg[2] != null ? toInt(seg[2], 1) : 1;
+    if (key) out.push({ key, value, turns });
+  }
+
+  return out;
+}
+
+/**
+ * ✅ Avança turno automaticamente
+ * - Se fechar ciclo: aplica tick 1x na rodada, round++, turnIndex=0, actedThisRound=[]
+ * - Se não: turnIndex++
+ * - Emite evento socket "combat:turn" para a sala combat_<id>
+ */
+async function advanceCombatTurn(combatId) {
+  const combat = await prisma.combat.findUnique({
+    where: { id: Number(combatId) },
+    select: {
+      turnOrder: true,
+      turnIndex: true,
+      roundNumber: true,
+    },
+  });
+
+  const order = Array.isArray(combat?.turnOrder) ? combat.turnOrder : null;
+  if (!order || order.length === 0) {
+    return { ok: false, error: "turnOrder_not_set" };
+  }
+
+  const currIndex = Number(combat.turnIndex) || 0;
+  const nextIndex = currIndex + 1;
+
+  // Fechou rodada
+  if (nextIndex >= order.length) {
+    const newRound = (Number(combat.roundNumber) || 1) + 1;
+
+    // tick 1x por rodada (DOT + duração)
+    const tickResults = [];
+    for (const id of order) {
+      const characterId = Number(id);
+      const tick = await CombatStatusService.tickCharacter(characterId);
+
+      await prisma.combatLog.create({
+        data: {
+          combatId: Number(combatId),
+          actorId: characterId,
+          targetId: null,
+          action: "TURN_TICK",
+          payload: tick,
+        },
+      });
+
+      tickResults.push({ characterId, tick });
+    }
+
+    const updated = await prisma.combat.update({
+      where: { id: Number(combatId) },
+      data: {
+        roundNumber: newRound,
+        turnIndex: 0,
+        actedThisRound: [],
+      },
     });
 
-    socket.on('update_hit_points', data => {
-        return io.to(`portrait_character_${data.character_id}`).emit('update_hit_points', data);
+    await prisma.combatLog.create({
+      data: {
+        combatId: Number(combatId),
+        actorId: Number(order[0]),
+        targetId: null,
+        action: "ROUND_ADVANCE",
+        payload: { roundNumber: newRound },
+      },
     });
 
-    socket.on('dice_roll', data => {
-        return io.to(`dice_character_${data.character_id}`).emit('dice_roll', data);
+    return {
+      ok: true,
+      advanced: "ROUND",
+      currentActorId: Number(order[0]),
+      combat: updated,
+      tickResults,
+    };
+  }
+
+  // Só avançou turno
+  const updated = await prisma.combat.update({
+    where: { id: Number(combatId) },
+    data: { turnIndex: nextIndex },
+  });
+
+  await prisma.combatLog.create({
+    data: {
+      combatId: Number(combatId),
+      actorId: Number(order[nextIndex]),
+      targetId: null,
+      action: "TURN_ADVANCE",
+      payload: { turnIndex: nextIndex, roundNumber: combat.roundNumber },
+    },
+  });
+
+  return {
+    ok: true,
+    advanced: "TURN",
+    currentActorId: Number(order[nextIndex]),
+    combat: updated,
+    tickResults: null,
+  };
+}
+
+/**
+ * POST /roll
+ * (rolagem segura, com bônus jujutsu e sureHit calculado se tiver target_id)
+ */
+app.post("/roll", async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.character_id || !body.max_number) {
+      return res.status(400).json({ error: "Data not Set" });
+    }
+
+    const characterId = Number(body.character_id);
+    const targetId = body.target_id ? Number(body.target_id) : null;
+    const maxNumber = Number(body.max_number);
+    const times = body.times ? Number(body.times) : 1;
+
+    const attacker = await prisma.character.findUnique({
+      where: { id: characterId },
+      include: { cursedStats: true, domainState: true },
     });
+
+    if (!attacker)
+      return res.status(400).json({ error: "Character not found" });
+
+    let target = null;
+    if (targetId) {
+      target = await prisma.character.findUnique({
+        where: { id: targetId },
+        include: { domainState: true },
+      });
+    }
+
+    let cursedStats = attacker.cursedStats;
+    if (!cursedStats) {
+      cursedStats = await prisma.cursedStats.create({
+        data: {
+          characterId,
+          cursedEnergyMax: 100,
+          cursedEnergy: 100,
+          cursedControl: 10,
+          mentalPressure: 0,
+          domainUnlocked: false,
+        },
+      });
+    }
+
+    const jujutsu = body.jujutsu || null;
+    const s = { ...cursedStats };
+
+    let rollBonus = 0;
+    const notes = [];
+
+    if (jujutsu && jujutsu.type === "reinforce") {
+      const r = engine.reinforceBody(s, jujutsu.intensity || 1);
+      rollBonus += r.bonus;
+      notes.push(`Reforço corporal +${r.bonus} (custo ${r.cost} EA)`);
+    }
+
+    if (jujutsu && jujutsu.type === "emotionalBoost") {
+      const r = engine.emotionalBoost(s, jujutsu.value || 5);
+      rollBonus += r.bonus;
+      notes.push(`Boost emocional +${r.bonus} (PM +${r.pressureAdded})`);
+    }
+
+    const sure = resolveSureHit(
+      attacker.domainState,
+      target ? target.domainState : null,
+    );
+    if (sure.sureHit)
+      notes.push("Sure-hit: acerto garantido pelo Domínio (Expansão)");
+    else if (sure.reason === "sure_hit_cancelled")
+      notes.push("Sure-hit anulado: Domínio Simples / Cesta de Palha Oca");
+
+    const rolls = [];
+    for (let i = 0; i < times; i++) {
+      const base = generateRandomNumber(maxNumber);
+      rolls.push({
+        max_number: maxNumber,
+        rolled_number: base + rollBonus,
+        character_id: characterId,
+      });
+    }
+
+    await prisma.roll.createMany({ data: rolls });
+
+    if (jujutsu) {
+      await prisma.cursedStats.update({
+        where: { characterId },
+        data: {
+          cursedEnergy: s.cursedEnergy,
+          cursedEnergyMax: s.cursedEnergyMax,
+          cursedControl: s.cursedControl,
+          mentalPressure: s.mentalPressure,
+          domainUnlocked: s.domainUnlocked,
+        },
+      });
+    }
+
+    await DomainService.tick(characterId);
+    if (targetId) await DomainService.tick(targetId);
+
+    const payload = {
+      character_id: characterId,
+      target_id: targetId,
+      rolls,
+      sureHit: sure.sureHit,
+      jujutsu: { rollBonus, notes },
+    };
+
+    io.to(`dice_character_${characterId}`).emit("dice_roll", payload);
+    return res.json(payload);
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ error: "internal_error", details: String(e) });
+  }
 });
 
+/**
+ * POST /combat/resolve
+ * + trava de turno
+ * + avança turno automaticamente
+ */
+app.post("/combat/resolve", async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (!body.attacker_id || !body.target_id) {
+      return res.status(400).json({ error: "missing_attacker_or_target" });
+    }
+
+    const attackerId = Number(body.attacker_id);
+    const targetId = Number(body.target_id);
+    const combatId = body.combatId ? Number(body.combatId) : null;
+    const maxNumber = body.max_number ? Number(body.max_number) : 20;
+    const times = body.times ? Number(body.times) : 1;
+    const baseDamage = body.baseDamage != null ? Number(body.baseDamage) : 5;
+
+    // ✅ TRAVA DE TURNO (se combatId presente)
+    if (combatId) {
+      const combat = await prisma.combat.findUnique({
+        where: { id: combatId },
+        select: { turnOrder: true, turnIndex: true, actedThisRound: true },
+      });
+
+      const order = Array.isArray(combat?.turnOrder) ? combat.turnOrder : null;
+      if (!order || order.length === 0) {
+        return res.status(400).json({ error: "turnOrder_not_set" });
+      }
+
+      const currentActorId = Number(order[Number(combat.turnIndex) || 0]);
+      if (currentActorId !== attackerId) {
+        return res.status(400).json({
+          error: "not_your_turn",
+          details: `Agora é o turno do personagem ${currentActorId}`,
+          currentActorId,
+        });
+      }
+
+      const acted = Array.isArray(combat.actedThisRound)
+        ? combat.actedThisRound
+        : [];
+      if (acted.includes(attackerId)) {
+        return res.status(400).json({ error: "already_acted_this_round" });
+      }
+
+      await prisma.combat.update({
+        where: { id: combatId },
+        data: { actedThisRound: [...acted, attackerId] },
+      });
+    }
+
+    const attacker = await prisma.character.findUnique({
+      where: { id: attackerId },
+      include: {
+        cursedStats: true,
+        domainState: true,
+        skills: { include: { skill: true } },
+        attributes: { include: { attribute: true } },
+      },
+    });
+    if (!attacker) return res.status(400).json({ error: "attacker_not_found" });
+
+    const target = await prisma.character.findUnique({
+      where: { id: targetId },
+      include: {
+        domainState: true,
+        skills: { include: { skill: true } },
+        attributes: { include: { attribute: true } },
+      },
+    });
+    if (!target) return res.status(400).json({ error: "target_not_found" });
+
+    // status mods
+    const attackerStatuses = await CombatStatusService.listStatuses(attackerId);
+    const targetStatuses = await CombatStatusService.listStatuses(targetId);
+
+    const aMods = CombatStatusService.computeModifiers(attackerStatuses);
+    const tMods = CombatStatusService.computeModifiers(targetStatuses);
+
+    if (aMods.blocksAction) {
+      return res
+        .status(200)
+        .json({ ok: false, reason: "stunned", notes: aMods.notes });
+    }
+    if (aMods.blocksTechnique && body.techniqueId) {
+      return res.status(400).json({ error: "tech_seal_blocks_technique" });
+    }
+
+    // cursed stats
+    let cursedStats = attacker.cursedStats;
+    if (!cursedStats) {
+      cursedStats = await prisma.cursedStats.create({
+        data: {
+          characterId: attackerId,
+          cursedEnergyMax: 100,
+          cursedEnergy: 100,
+          cursedControl: 10,
+          mentalPressure: 0,
+          domainUnlocked: false,
+        },
+      });
+    }
+
+    const jujutsu = body.jujutsu || null;
+    const s = { ...cursedStats };
+
+    let rollBonus = 0;
+    const notes = [];
+
+    // domínio
+    const sure = resolveSureHit(attacker.domainState, target.domainState);
+    if (sure.sureHit)
+      notes.push("Sure-hit: acerto garantido pelo Domínio (Expansão)");
+    else if (sure.reason === "sure_hit_cancelled")
+      notes.push("Sure-hit anulado: Domínio Simples / Cesta de Palha Oca");
+
+    // amplificação bloqueia técnica do atacante
+    const attackerAmplifying =
+      attacker.domainState &&
+      attacker.domainState.turnsRemaining > 0 &&
+      attacker.domainState.type === "AMPLIFICATION";
+
+    if (attackerAmplifying && body.techniqueId) {
+      return res.status(400).json({
+        error: "amplification_blocks_technique",
+        details:
+          "Amplificação ativa: não pode usar técnica inata enquanto amplifica.",
+      });
+    }
+
+    // buffs jujutsu
+    if (jujutsu && jujutsu.type === "reinforce") {
+      const r = engine.reinforceBody(s, jujutsu.intensity || 1);
+      rollBonus += r.bonus;
+      notes.push(`Reforço corporal +${r.bonus} (custo ${r.cost} EA)`);
+    }
+    if (jujutsu && jujutsu.type === "emotionalBoost") {
+      const r = engine.emotionalBoost(s, jujutsu.value || 5);
+      rollBonus += r.bonus;
+      notes.push(`Boost emocional +${r.bonus} (PM +${r.pressureAdded})`);
+    }
+
+    // status mods (ATK)
+    rollBonus += aMods.rollBonusDelta;
+    notes.push(...aMods.notes);
+
+    // técnica (opcional)
+    let technique = null;
+    if (body.techniqueId) {
+      technique = await prisma.innateTechnique.findFirst({
+        where: { id: Number(body.techniqueId), characterId: attackerId },
+      });
+      if (!technique)
+        return res.status(400).json({ error: "technique_not_found" });
+
+      engine.spendCursedEnergy(s, technique.cost);
+      notes.push(`Técnica: ${technique.name} (custo ${technique.cost} EA)`);
+      if (technique.effect) notes.push(`Efeito: ${technique.effect}`);
+    }
+
+    // defesa do alvo + mods
+    const baseDefense = getDefenseScore(target);
+    const defenseScore = baseDefense + tMods.defenseDelta;
+    notes.push(...tMods.notes);
+    notes.push(`Defesa do alvo: ${defenseScore}`);
+
+    // rolagens e hits
+    const rolls = [];
+    let hits = 0;
+
+    for (let i = 0; i < times; i++) {
+      const base = generateRandomNumber(maxNumber);
+      const finalNumber = base + rollBonus;
+      const hit = sure.sureHit ? true : finalNumber >= defenseScore;
+      if (hit) hits++;
+
+      rolls.push({
+        max_number: maxNumber,
+        rolled_number: finalNumber,
+        character_id: attackerId,
+        hit,
+      });
+    }
+
+    // salva rolls
+    await prisma.roll.createMany({
+      data: rolls.map((r) => ({
+        max_number: r.max_number,
+        rolled_number: r.rolled_number,
+        character_id: r.character_id,
+      })),
+    });
+
+    // persiste cursedStats se mudou
+    if (jujutsu || technique) {
+      await prisma.cursedStats.update({
+        where: { characterId: attackerId },
+        data: {
+          cursedEnergy: s.cursedEnergy,
+          cursedEnergyMax: s.cursedEnergyMax,
+          cursedControl: s.cursedControl,
+          mentalPressure: s.mentalPressure,
+          domainUnlocked: s.domainUnlocked,
+        },
+      });
+    }
+
+    // tick domínio (consome 1 turno por ação)
+    await DomainService.tick(attackerId);
+    await DomainService.tick(targetId);
+
+    // dano
+    let damageApplied = 0;
+    let targetAfter = null;
+
+    if (hits > 0) {
+      damageApplied = Math.max(0, Math.trunc(baseDamage)) * hits;
+
+      const targetNow = await prisma.character.findUnique({
+        where: { id: targetId },
+        select: {
+          current_hit_points: true,
+          max_hit_points: true,
+          is_dead: true,
+        },
+      });
+
+      const newHp = clamp(
+        (targetNow.current_hit_points || 0) - damageApplied,
+        0,
+        targetNow.max_hit_points || 0,
+      );
+      const dead = newHp <= 0;
+
+      targetAfter = await prisma.character.update({
+        where: { id: targetId },
+        data: { current_hit_points: newHp, is_dead: dead },
+      });
+
+      // emite HP update
+      io.to(`portrait_character_${targetId}`).emit("update_hit_points", {
+        character_id: targetId,
+        current_hit_points: targetAfter.current_hit_points,
+        max_hit_points: targetAfter.max_hit_points,
+        is_dead: targetAfter.is_dead,
+      });
+    }
+
+    // aplicar status vindo da técnica (se tiver tags STATUS:...)
+    if (technique && hits > 0) {
+      const tags = parseStatusTags(technique.effect);
+      for (const t of tags) {
+        await CombatStatusService.applyStatus({
+          characterId: targetId,
+          sourceId: attackerId,
+          key: t.key,
+          kind: "DEBUFF",
+          value: t.value,
+          stacks: 1,
+          turns: t.turns,
+          note: `Aplicado por ${technique.name}`,
+        });
+        notes.push(`Status aplicado: ${t.key} (${t.turns} turnos)`);
+      }
+    }
+
+    // amplificação “anula técnica no contato” (nota de regra)
+    if (attackerAmplifying && hits > 0) {
+      notes.push(
+        "Amplificação: técnica do alvo é anulada no contato (neste hit)",
+      );
+    }
+
+    // ✅ payload final (resposta + log)
+    const payload = {
+      ok: true,
+      combatId,
+      attacker_id: attackerId,
+      target_id: targetId,
+      sureHit: sure.sureHit,
+      defenseScore,
+      hits,
+      damageApplied,
+      targetAfter: targetAfter
+        ? {
+            current_hit_points: targetAfter.current_hit_points,
+            max_hit_points: targetAfter.max_hit_points,
+            is_dead: targetAfter.is_dead,
+          }
+        : null,
+      rolls,
+      jujutsu: {
+        rollBonus,
+        notes,
+        cursedStatsAfter: {
+          cursedEnergy: s.cursedEnergy,
+          cursedEnergyMax: s.cursedEnergyMax,
+          cursedControl: s.cursedControl,
+          mentalPressure: s.mentalPressure,
+          domainUnlocked: s.domainUnlocked,
+        },
+      },
+    };
+
+    // emite dado pro attacker (tela Dice)
+    io.to(`dice_character_${attackerId}`).emit("dice_roll", {
+      character_id: attackerId,
+      target_id: targetId,
+      rolls: rolls.map((r) => ({
+        max_number: r.max_number,
+        rolled_number: r.rolled_number,
+      })),
+      jujutsu: { notes },
+      sureHit: sure.sureHit,
+    });
+
+    // ✅ grava log, se combatId foi enviado
+    if (combatId) {
+      await prisma.combatLog.create({
+        data: {
+          combatId,
+          actorId: attackerId,
+          targetId,
+          action: body.techniqueId ? "TECHNIQUE" : "ATTACK",
+          payload,
+        },
+      });
+
+      // ✅ avança turno automaticamente
+      const adv = await advanceCombatTurn(combatId);
+      payload.turnAdvance = adv;
+
+      // ✅ emite evento do combate (para UI reagir)
+      if (adv?.ok && adv.currentActorId) {
+        io.to(`combat_${combatId}`).emit("combat:turn", {
+          combatId: Number(combatId),
+          currentActorId: adv.currentActorId,
+          advanced: adv.advanced,
+          roundNumber: adv.combat?.roundNumber,
+          turnIndex: adv.combat?.turnIndex,
+        });
+      }
+    }
+
+    return res.json(payload);
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ error: "internal_error", details: String(e) });
+  }
+});
+
+// Socket handlers
+io.on("connect", (socket) => {
+  socket.on("room:join", (roomName) => socket.join(roomName));
+
+  // ✅ sala do combate (pra receber "combat:turn")
+  socket.on("combat:join", (combatId) => {
+    if (!combatId) return;
+    socket.join(`combat_${Number(combatId)}`);
+  });
+
+  socket.on("update_hit_points", (data) => {
+    io.to(`portrait_character_${data.character_id}`).emit(
+      "update_hit_points",
+      data,
+    );
+  });
+
+  // Não aceite "dice_roll" vindo do cliente (evita forjar dado)
+});
+
+// Next handler
 nextApp.prepare().then(() => {
-    app.all('*', (req, res) => {
-        return nextHandler(req, res);
-    });
+  app.all("*", (req, res) => nextHandler(req, res));
 
-    server.listen(process.env.PORT || 3000, err => {
-        if(err) {
-            throw err;
-        }
-
-        console.log('[Server] Successfully started on port', process.env.PORT || 3000);
-    });
-})
+  server.listen(process.env.PORT || 3000, (err) => {
+    if (err) throw err;
+    console.log(
+      "[Server] Successfully started on port",
+      process.env.PORT || 3000,
+    );
+  });
+});

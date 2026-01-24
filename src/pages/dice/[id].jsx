@@ -1,144 +1,162 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import Head from 'next/head';
-import Queue from 'js-queue';
+import React, { useState, useEffect, useMemo } from "react";
+import Head from "next/head";
+import Queue from "js-queue";
 
-import { withStyles } from '@mui/styles';
+import { withStyles } from "@mui/styles";
 
-import socket from '../../utils/socket';
+import socket from "../../utils/socket";
 
-import { prisma } from '../../database';
+import { prisma } from "../../database";
 
 export const getServerSideProps = async ({ params }) => {
   const characterId = isNaN(params.id) ? null : Number(params.id);
 
-  if(!characterId) {
-    return {
-      props: {
-        character: null
-      }
-    }
+  if (!characterId) {
+    return { props: { character: null } };
   }
 
   const character = await prisma.character.findUnique({
-    where: {
-      id: characterId
-    }
+    where: { id: characterId },
   });
 
-  if(!character) {
-    return {
-      props: {
-        character: null
-      }
-    }
+  if (!character) {
+    return { props: { character: null } };
   }
 
   const configs = await prisma.config.findMany();
-
   const serialized = JSON.parse(JSON.stringify(character));
 
   return {
     props: {
-        character: serialized,
-        config: {
-          diceOnScreenTimeoutInMS: parseInt(configs.find(config => config.name === 'DICE_ON_SCREEN_TIMEOUT_IN_MS').value),
-          timeBetweenDicesInMS: parseInt(configs.find(config => config.name === 'TIME_BETWEEN_DICES_IN_MS').value),
-        }
-    }
-  }
-}
+      character: serialized,
+      config: {
+        diceOnScreenTimeoutInMS: parseInt(
+          configs.find(
+            (config) => config.name === "DICE_ON_SCREEN_TIMEOUT_IN_MS",
+          ).value,
+        ),
+        timeBetweenDicesInMS: parseInt(
+          configs.find((config) => config.name === "TIME_BETWEEN_DICES_IN_MS")
+            .value,
+        ),
+      },
+    },
+  };
+};
 
-function Dice({
-  classes,
-  character,
-  config
-}) {
+function Dice({ classes, character, config }) {
   const queue = useMemo(() => new Queue(), []);
-
-  const [currentDice, setCurrentDice] = useState(null);
+  const [currentDice, setCurrentDice] = useState(null); // { roll, jujutsu }
 
   useEffect(() => {
-    document.body.style.backgroundColor = 'transparent';
+    document.body.style.backgroundColor = "transparent";
   }, []);
 
   useEffect(() => {
-    function showDiceOnScreen(roll) {
-      setCurrentDice(roll);
-  
+    function showDiceOnScreen(payload) {
+      setCurrentDice(payload);
+
       setTimeout(() => {
-        // Remove Dice
         setCurrentDice(null);
       }, config.diceOnScreenTimeoutInMS);
-  
+
       setTimeout(() => {
         this.next();
       }, config.diceOnScreenTimeoutInMS + config.timeBetweenDicesInMS);
     }
 
-    socket.emit('room:join', `dice_character_${character.id}`);
+    socket.emit("room:join", `dice_character_${character.id}`);
 
-    socket.on('dice_roll', data => {
-      data.rolls.forEach(roll => {
-        queue.add(showDiceOnScreen.bind(queue, roll));
+    socket.on("dice_roll", (data) => {
+      const jujutsu = data.jujutsu || null;
+
+      data.rolls.forEach((roll) => {
+        queue.add(showDiceOnScreen.bind(queue, { roll, jujutsu }));
       });
     });
+
+    return () => {
+      socket.off("dice_roll");
+    };
   }, [character, queue, config]);
 
-  if(!character) {
-    return (
-        <div>Personagem não existe!</div>
-    )
+  if (!character) {
+    return <div>Personagem não existe!</div>;
   }
 
   return (
     <React.Fragment>
       <Head>
-          <title>Dados de {character.name} | RPG</title>
+        <title>Dados de {character.name} | RPG</title>
       </Head>
+
       <div className={classes.container}>
-          {
-            currentDice && (
-              <div className={classes.diceContainer}>
-                  <div>
-                    <video width="600" height="600" autoPlay muted className={classes.diceVideo}>
-                      <source src="/assets/dice.webm" type="video/webm" />
-                    </video>
-                  </div>
-                  <div className={classes.diceResult}>
-                    <span className={classes.diceNumber}>{currentDice.rolled_number}</span>
-                  </div>
-              </div>
-            )
-          }
+        {currentDice && (
+          <div className={classes.diceContainer}>
+            <div>
+              <video
+                width="600"
+                height="600"
+                autoPlay
+                muted
+                className={classes.diceVideo}
+              >
+                <source src="/assets/dice.webm" type="video/webm" />
+              </video>
+            </div>
+
+            <div className={classes.diceResult}>
+              <span className={classes.diceNumber}>
+                {currentDice.roll.rolled_number}
+              </span>
+
+              {currentDice.jujutsu?.notes?.length > 0 && (
+                <div className={classes.jujutsuNotes}>
+                  {currentDice.jujutsu.notes.map((n, idx) => (
+                    <div key={idx}>{n}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </React.Fragment>
-  )
+  );
 }
 
 const styles = (theme) => ({
   container: {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center',
-    fontFamily: 'Fruktur',
-    userSelect: 'none'
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    fontFamily: "Fruktur",
+    userSelect: "none",
   },
   diceContainer: {
-    position: 'relative'
+    position: "relative",
   },
   diceResult: {
-    position: 'absolute',
-    top: '180px',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%'
+    position: "absolute",
+    top: "180px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    width: "100%",
   },
   diceNumber: {
     zIndex: 2,
-    fontSize: '150px',
-    textShadow: '0 0 10px #FFFFFF'
-  }
+    fontSize: "150px",
+    textShadow: "0 0 10px #FFFFFF",
+  },
+  jujutsuNotes: {
+    marginTop: "16px",
+    zIndex: 2,
+    fontSize: "22px",
+    textAlign: "center",
+    textShadow: "0 0 10px #FFFFFF",
+  },
 });
 
 export default withStyles(styles)(Dice);

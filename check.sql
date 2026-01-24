@@ -1,0 +1,2 @@
+SELECT DATABASE() AS current_db;
+SHOW TABLES;

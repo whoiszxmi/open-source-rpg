@@ -1,6 +1,5 @@
 datasource db {
   provider = "mysql"
-  url      = env("DB_PROVIDER_URL")
 }
 
 generator client {
@@ -8,55 +7,65 @@ generator client {
 }
 
 model Character {
-  id Int @id @default(autoincrement())
-  name String
-  age Int?
-  gender String?
-  player_name String?
-  current_hit_points Int @default(0)
-  max_hit_points Int @default(0)
-  current_picture Int @default(1)
-  is_dead Boolean @default(false)
+  id                             Int     @id @default(autoincrement())
+  name                           String
+  age                            Int?
+  gender                         String?
+  player_name                    String?
+  current_hit_points             Int     @default(0)
+  max_hit_points                 Int     @default(0)
+  current_picture                Int     @default(1)
+  is_dead                        Boolean @default(false)
   standard_character_picture_url String?
-  injured_character_picture_url String?
+  injured_character_picture_url  String?
 
   created_at DateTime @default(now())
 
   attributes CharacterAttributes[]
-  skills CharacterSkills[]
-  rolls Roll[]
-  
+  skills     CharacterSkills[]
+  rolls      Roll[]
+
+  // ============================
+  // Jujutsu Edition (relações)
+  // ============================
+
+  cursedStats      CursedStats?
+  innateTechniques InnateTechnique[]
+  bindingVows      BindingVow[]
+  domainState DomainState?
+  combatStatuses CombatStatus[]
+
+
   @@map("character")
 }
 
 model CharacterAttributes {
-  character Character @relation(fields: [character_id], references: [id])
+  character    Character @relation(fields: [character_id], references: [id])
   character_id Int
-  attribute Attribute @relation(fields: [attribute_id], references: [id])
+  attribute    Attribute @relation(fields: [attribute_id], references: [id])
   attribute_id Int
 
   value String?
 
   @@id([character_id, attribute_id])
-
   @@map("character_attributes")
 }
 
 model Attribute {
-  id Int @id @default(autoincrement())
-  name String
+  id          Int     @id @default(autoincrement())
+  name        String
   description String?
 
   characters CharacterAttributes[]
-  
+
   @@map("attribute")
 }
 
 model CharacterSkills {
-  character Character @relation(fields: [character_id], references: [id])
+  character    Character @relation(fields: [character_id], references: [id])
   character_id Int
-  skill Skill @relation(fields: [skill_id], references: [id])
-  skill_id Int
+  skill        Skill     @relation(fields: [skill_id], references: [id])
+  skill_id     Int
 
   value String?
 
@@ -65,8 +74,8 @@ model CharacterSkills {
 }
 
 model Skill {
-  id Int @id @default(autoincrement())
-  name String
+  id          Int     @id @default(autoincrement())
+  name        String
   description String?
 
   characters CharacterSkills[]
@@ -77,21 +86,138 @@ model Skill {
 model Roll {
   id Int @id @default(autoincrement())
 
-  max_number Int
+  max_number    Int
   rolled_number Int
 
-  character   Character @relation(fields: [character_id], references: [id])
+  character    Character @relation(fields: [character_id], references: [id])
   character_id Int
 
   rolled_at DateTime @default(now())
-  
+
   @@map("roll")
 }
 
 model Config {
-  id Int @id @default(autoincrement())
-  name String @unique
+  id    Int     @id @default(autoincrement())
+  name  String  @unique
   value String?
-  
+
   @@map("config")
+}
+
+// ===================================
+// Jujutsu Edition (novos models)
+// ===================================
+
+model CursedStats {
+  id          Int @id @default(autoincrement())
+  characterId Int @unique
+
+  cursedEnergyMax Int
+  cursedEnergy    Int
+  cursedControl   Int
+  mentalPressure  Int
+  domainUnlocked  Boolean @default(false)
+
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@map("cursed_stats")
+}
+
+model InnateTechnique {
+  id          Int @id @default(autoincrement())
+  characterId Int
+
+  name        String
+  description String
+  cost        Int
+  effect      String
+
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@map("innate_technique")
+}
+
+model BindingVow {
+  id          Int @id @default(autoincrement())
+  characterId Int
+
+  vow     String
+  bonus   String
+  penalty String
+
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@map("binding_vow")
+}
+
+model DomainState {
+  id             Int      @id @default(autoincrement())
+  characterId    Int      @unique
+  type           String   // "EXPANSION" | "SIMPLE_DOMAIN" | "WICKER_BASKET" | "AMPLIFICATION"
+  turnsRemaining Int
+  sureHitActive  Boolean  @default(false)
+  notes          String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@map("domain_state")
+}
+
+model CombatStatus {
+  id             Int      @id @default(autoincrement())
+  characterId    Int
+  sourceId       Int?     // quem aplicou (opcional)
+  key            String   // ex: "BURN", "BLEED", "STUN", "TECH_SEAL"
+  kind           String   // "BUFF" | "DEBUFF"
+  value          Int      @default(0)  // intensidade
+  stacks         Int      @default(1)
+  turnsRemaining Int      @default(1)
+  note           String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@index([characterId])
+  @@map("combat_status")
+}
+
+model Combat {
+  id         Int      @id @default(autoincrement())
+  name       String?
+  isActive   Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  participants Json? // [1,2,3,4]
+
+  // ✅ turno/rodada
+  roundNumber   Int   @default(1)
+  turnIndex     Int   @default(0) // índice do participante atual na order
+  turnOrder     Json? // [ids ordenados por iniciativa]
+  actedThisRound Json? // [ids que já agiram nesta rodada]
+
+  logs CombatLog[]
+
+  @@map("combat")
+}
+
+
+model CombatLog {
+  id         Int      @id @default(autoincrement())
+  combatId   Int
+  actorId    Int
+  targetId   Int?
+  action     String
+  payload    Json
+  created_at DateTime @default(now())
+
+  combat Combat @relation(fields: [combatId], references: [id])
+
+  @@index([combatId])
+  @@map("combat_log")
 }
