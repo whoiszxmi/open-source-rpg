@@ -112,6 +112,20 @@ async function getPlayerSnapshot(prisma, characterId) {
     return acc;
   }, {});
 
+  const computedModifiers = { stats: {} };
+  const traitSources = [
+    ...blessings.map((b) => b?.blessing),
+    ...curses.map((c) => c?.curse),
+  ].filter(Boolean);
+
+  for (const trait of traitSources) {
+    const stats = trait?.effects?.stats || {};
+    for (const [key, value] of Object.entries(stats)) {
+      const current = Number(computedModifiers.stats[key] || 0);
+      computedModifiers.stats[key] = current + Number(value || 0);
+    }
+  }
+
   return {
     ok: true,
     characterId: cid,
@@ -141,6 +155,7 @@ async function getPlayerSnapshot(prisma, characterId) {
       : null,
     blessings: JSON.parse(JSON.stringify(blessings || [])),
     curses: JSON.parse(JSON.stringify(curses || [])),
+    computedModifiers,
   };
 }
 

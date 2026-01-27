@@ -119,6 +119,111 @@ app.post("/character/create", async (req, res) => {
   }
 });
 
+app.post("/room/create", async (req, res) => {
+  try {
+    const { name } = req.body || {};
+    let code = null;
+
+    for (let i = 0; i < 5; i += 1) {
+      const candidate = generateRoomCode();
+      const exists = await prisma.room.findUnique({
+        where: { code: candidate },
+        select: { id: true },
+      });
+      if (!exists) {
+        code = candidate;
+        break;
+      }
+    }
+
+    if (!code) {
+      return res
+        .status(500)
+        .json({ ok: false, error: "code_generation_failed" });
+    }
+
+    const room = await prisma.room.create({
+      data: {
+        name: name || null,
+        code,
+        isActive: true,
+      },
+    });
+
+    return res.json({ ok: true, room });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
+
+app.post("/room/join", async (req, res) => {
+  try {
+    const { code, characterId, role } = req.body || {};
+    if (!code || !characterId) {
+      return res.status(400).json({ ok: false, error: "missing_fields" });
+    }
+
+    const room = await prisma.room.findUnique({
+      where: { code: String(code).trim() },
+      select: { id: true, code: true, name: true, isActive: true },
+    });
+    if (!room || !room.isActive) {
+      return res.status(404).json({ ok: false, error: "room_not_found" });
+    }
+
+    const participant = await prisma.roomParticipant.upsert({
+      where: {
+        roomId_characterId: {
+          roomId: room.id,
+          characterId: Number(characterId),
+        },
+      },
+      update: { role: role || "PLAYER" },
+      create: {
+        roomId: room.id,
+        characterId: Number(characterId),
+        role: role || "PLAYER",
+      },
+    });
+
+    return res.json({ ok: true, room, participant });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
+
+app.get("/room/:code", async (req, res) => {
+  try {
+    const code = String(req.params.code || "").trim();
+    if (!code) {
+      return res.status(400).json({ ok: false, error: "missing_code" });
+    }
+
+    const room = await prisma.room.findUnique({
+      where: { code },
+      include: {
+        participants: {
+          select: { id: true, characterId: true, role: true, joinedAt: true },
+        },
+      },
+    });
+
+    if (!room) {
+      return res.status(404).json({ ok: false, error: "room_not_found" });
+    }
+
+    return res.json({ ok: true, room });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
+
 app.post("/character/add-blessing", async (req, res) => {
   try {
     const { characterId, blessingKey, blessingId } = req.body || {};
@@ -271,6 +376,16 @@ function toInt(v, fallback = 0) {
   return Number.isFinite(n) ? Math.trunc(n) : fallback;
 }
 
+async function emitSnapshotUpdate(characterIds) {
+  const ids = Array.isArray(characterIds) ? characterIds : [];
+  ids.forEach((id) => {
+    if (!id) return;
+    io.to(`snapshot_character_${Number(id)}`).emit("snapshot:update", {
+      characterId: Number(id),
+    });
+  });
+}
+
 function pickSkillValue(character, names) {
   if (!character || !character.skills) return null;
   for (const wanted of names) {
@@ -318,6 +433,15 @@ function getDefenseScore(targetCharacter) {
   return 10;
 }
 
+function generateRoomCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < 6; i += 1) {
+    out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return out;
+}
+
 // Tags simples na technique.effect (opcional): "STATUS:BURN:2:3" (key:value:turns)
 // Ex: "STATUS:BURN:2:3; STATUS:STUN:1:1"
 function parseStatusTags(effectText) {
@@ -355,6 +479,7 @@ async function advanceCombatTurn(combatId) {
       turnOrder: true,
       turnIndex: true,
       roundNumber: true,
+      participants: true,
     },
   });
 
@@ -408,6 +533,16 @@ async function advanceCombatTurn(combatId) {
       },
     });
 
+    const participantIds = Array.isArray(combat.participants)
+      ? combat.participants
+      : order;
+    io.to(`combat_${combatId}`).emit("combat:update", {
+      combatId: Number(combatId),
+      combat: updated,
+      currentActorId: Number(order[0]),
+    });
+    await emitSnapshotUpdate(participantIds);
+
     return {
       ok: true,
       advanced: "ROUND",
@@ -432,6 +567,16 @@ async function advanceCombatTurn(combatId) {
       payload: { turnIndex: nextIndex, roundNumber: combat.roundNumber },
     },
   });
+
+  const participantIds = Array.isArray(combat.participants)
+    ? combat.participants
+    : order;
+  io.to(`combat_${combatId}`).emit("combat:update", {
+    combatId: Number(combatId),
+    combat: updated,
+    currentActorId: Number(order[nextIndex]),
+  });
+  await emitSnapshotUpdate(participantIds);
 
   return {
     ok: true,
@@ -978,6 +1123,15 @@ app.post("/combat/resolve", async (req, res) => {
           turnIndex: adv.combat?.turnIndex,
         });
       }
+
+      io.to(`combat_${combatId}`).emit("log:new", payload);
+      io.to(`combat_${combatId}`).emit("combat:update", {
+        combatId: Number(combatId),
+        combat: adv?.combat || null,
+        currentActorId: adv?.currentActorId || null,
+      });
+
+      await emitSnapshotUpdate(participants);
     }
 
     if (blackFlashTriggered) {
@@ -1011,6 +1165,11 @@ io.on("connect", (socket) => {
   socket.on("combat:join", (combatId) => {
     if (!combatId) return;
     socket.join(`combat_${Number(combatId)}`);
+  });
+
+  socket.on("snapshot:join", (characterId) => {
+    if (!characterId) return;
+    socket.join(`snapshot_character_${Number(characterId)}`);
   });
 
   socket.on("update_hit_points", (data) => {

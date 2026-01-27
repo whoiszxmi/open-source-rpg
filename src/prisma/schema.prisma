@@ -174,8 +174,11 @@ model Blessing {
   rank        Rank
   cost        Int
   category    String
+  type        String?
   description String?
   effects     Json
+  tags        Json?
+  excludes    Json?
 
   characters CharacterBlessing[]
 
@@ -189,8 +192,12 @@ model Curse {
   rank        Rank
   reward      Int
   category    String
+  type        String?
+  valueGain   Int?
   description String?
   effects     Json
+  tags        Json?
+  excludes    Json?
 
   characters CharacterCurse[]
 
@@ -198,9 +205,10 @@ model Curse {
 }
 
 model CharacterBlessing {
-  id          Int @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   characterId Int
   blessingId  Int
+  createdAt   DateTime @default(now())
 
   character Character @relation(fields: [characterId], references: [id])
   blessing  Blessing  @relation(fields: [blessingId], references: [id])
@@ -211,9 +219,10 @@ model CharacterBlessing {
 }
 
 model CharacterCurse {
-  id          Int @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   characterId Int
   curseId     Int
+  createdAt   DateTime @default(now())
 
   character Character @relation(fields: [characterId], references: [id])
   curse     Curse     @relation(fields: [curseId], references: [id])
@@ -318,6 +327,7 @@ model CombatStatus {
 
 model Combat {
   id         Int      @id @default(autoincrement())
+  roomId     Int?
   name       String?
   isActive   Boolean  @default(true)
   created_at DateTime @default(now())
@@ -330,6 +340,7 @@ model Combat {
   turnOrder      Json? // [ids ordenados por iniciativa]
   actedThisRound Json? // [ids que já agiram nesta rodada]
 
+  room Room?       @relation(fields: [roomId], references: [id])
   logs CombatLog[]
 
   @@map("combat")
@@ -348,4 +359,33 @@ model CombatLog {
 
   @@index([combatId])
   @@map("combat_log")
+}
+
+model Room {
+  id        Int      @id @default(autoincrement())
+  name      String?
+  code      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  participants RoomParticipant[]
+  combats      Combat[]
+
+  @@map("room")
+}
+
+model RoomParticipant {
+  id          Int      @id @default(autoincrement())
+  roomId      Int
+  characterId Int
+  role        String
+  joinedAt    DateTime @default(now())
+
+  room      Room      @relation(fields: [roomId], references: [id])
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@unique([roomId, characterId])
+  @@index([roomId])
+  @@index([characterId])
+  @@map("room_participant")
 }
