@@ -17,6 +17,11 @@ async function getPlayerSnapshot(prisma, characterId) {
       max_hit_points: true,
       is_dead: true,
       standard_character_picture_url: true,
+      appearance_key: true,
+      idle_anim_key: true,
+      attack_anim_key: true,
+      hit_anim_key: true,
+      scene_key: true,
     },
   });
 

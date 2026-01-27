@@ -56,6 +56,13 @@ export default function PlayerPage({ characterId, initial }) {
 
   const ch = snapshot?.character;
 
+  useEffect(() => {
+    if (!characterId) return;
+    if (typeof window === "undefined") return;
+    localStorage.setItem("rpg:lastCharacterId", String(characterId));
+    localStorage.setItem("rpg:lastPlayerPath", router.asPath);
+  }, [characterId, router.asPath]);
+
   // ✅ Refresh real
   const refresh = useCallback(async () => {
     if (!characterId) return;
@@ -63,21 +70,7 @@ export default function PlayerPage({ characterId, initial }) {
       const res = await fetch(`/api/player/${characterId}/snapshot`);
       const data = await res.json();
       if (data?.ok) {
-        setSnapshot((prev) => ({
-          ...prev,
-          ...data,
-          techniques: data?.techniques || [],
-          targets: data?.targets || [],
-          combatId: data?.combatId || null,
-          combat: data?.combat || null,
-          techniques:
-            data?.techniques ??
-            prev?.techniques ??
-            initial?.techniques ??
-            [],
-          targets:
-            data?.targets ?? prev?.targets ?? initial?.targets ?? [],
-        }));
+        setSnapshot(data);
       }
     } catch {
       // silencioso
@@ -271,10 +264,9 @@ export default function PlayerPage({ characterId, initial }) {
             ...r.cursedStatsAfter,
           },
         }));
-      } else {
-        await refresh();
       }
 
+      await refresh();
       return r;
     } catch (e) {
       setFeed((f) => [...f, `❌ ${e.message || e}`].slice(-50));
@@ -347,6 +339,7 @@ export default function PlayerPage({ characterId, initial }) {
         }));
       }
 
+      await refresh();
       return payload;
     } catch (e) {
       setFeed((f) =>

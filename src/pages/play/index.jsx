@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import Button from "../../components/ui/Button";
@@ -26,6 +26,15 @@ export default function Play() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [lastCharacterId, setLastCharacterId] = useState(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem("rpg:lastCharacterId");
+    if (stored && /^\d+$/.test(stored)) {
+      setLastCharacterId(Number(stored));
+    }
+  }, []);
 
   async function onEnter(e) {
     e?.preventDefault?.();
@@ -42,6 +51,17 @@ export default function Play() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function onContinue() {
+    if (!lastCharacterId) return;
+    await router.push(`/player/${lastCharacterId}`);
+  }
+
+  function onResetLast() {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem("rpg:lastCharacterId");
+    setLastCharacterId(null);
   }
 
   return (
@@ -62,16 +82,41 @@ export default function Play() {
             </div>
           </div>
 
+          {lastCharacterId ? (
+            <Card className="mb-6">
+              <CardHeader>
+                <div className="text-white/80 text-sm">Sessão anterior</div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-white/60">
+                  Último personagem: #{lastCharacterId}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button onClick={onContinue} size="lg">
+                    Continuar
+                  </Button>
+                  <Button
+                    onClick={onResetLast}
+                    size="lg"
+                    variant="ghost"
+                  >
+                    Trocar
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card>
             <CardHeader>
-              <div className="text-white/80 text-sm">Código do personagem</div>
+              <div className="text-white/80 text-sm">Código ou ID</div>
             </CardHeader>
             <CardContent>
               <form onSubmit={onEnter} className="space-y-3">
                 <input
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  placeholder="ex: X7P-4K2"
+                  placeholder="ex: X7P-4K2 ou 12"
                   className="h-12 w-full rounded-2xl bg-black/30 border border-white/10 px-4 outline-none text-white placeholder:text-white/30"
                 />
 
