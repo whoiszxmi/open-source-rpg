@@ -57,6 +57,46 @@ async function ensureBlessingsAndCurses(prisma) {
   await syncCurses(prisma, curses || []);
 }
 
+async function ensureBaseVisualPack(prisma) {
+  const manifestPath = path.join(
+    process.cwd(),
+    "public",
+    "assets",
+    "packs",
+    "base_pack",
+    "manifest.json",
+  );
+  try {
+    const raw = await fs.readFile(manifestPath, "utf8");
+    const manifest = JSON.parse(raw);
+    const packId = manifest.packId || "base_pack";
+    const basePath = `/assets/packs/${packId}`;
+    await prisma.visualPack.upsert({
+      where: { packId },
+      update: {
+        name: manifest.name || "Base Pack",
+        version: manifest.version || "1.0.0",
+        description: manifest.description || null,
+        manifestJson: manifest,
+        basePath,
+        isPublic: true,
+      },
+      create: {
+        packId,
+        name: manifest.name || "Base Pack",
+        version: manifest.version || "1.0.0",
+        description: manifest.description || null,
+        manifestJson: manifest,
+        basePath,
+        isPublic: true,
+      },
+    });
+  } catch (e) {
+    console.error("[Seed] Failed to sync base visual pack:", e);
+  }
+}
+
 module.exports = {
   ensureBlessingsAndCurses,
+  ensureBaseVisualPack,
 };
