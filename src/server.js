@@ -103,21 +103,6 @@ app.post("/character/create", async (req, res) => {
       createdGroups.push(group);
     }
 
-    const groupMap = createdGroups.reduce((acc, group) => {
-      acc[group.type] = group;
-      return acc;
-    }, {});
-
-    await prisma.character.update({
-      where: { id: character.id },
-      data: {
-        statsPhysicalId: groupMap.PHYSICAL?.id || null,
-        statsJujutsuId: groupMap.JUJUTSU?.id || null,
-        statsMentalId: groupMap.MENTAL?.id || null,
-        statsExtraId: groupMap.EXTRA?.id || null,
-      },
-    });
-
     await prisma.blackFlashState.create({
       data: { characterId: character.id, activeTurns: 0, nextThreshold: 20 },
     });
