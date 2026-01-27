@@ -70,7 +70,6 @@ model Character {
   blessings        CharacterBlessing[]
   curses           CharacterCurse[]
   statGroups       StatGroup[]
-  roomParticipants RoomParticipant[]
 
   @@map("character")
 }
