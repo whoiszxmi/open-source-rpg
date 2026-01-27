@@ -44,11 +44,6 @@ model Character {
   is_dead                        Boolean @default(false)
   standard_character_picture_url String?
   injured_character_picture_url  String?
-  appearance_key                 String?
-  idle_anim_key                  String?
-  attack_anim_key                String?
-  hit_anim_key                   String?
-  scene_key                      String?
   origin                         String? @db.VarChar(80)
   personalityTag                 String? @db.VarChar(60)
   bindingVow                     String? @db.VarChar(240)
@@ -66,17 +61,15 @@ model Character {
   // Jujutsu Edition (relações)
   // ============================
 
-  cursedStats         CursedStats?
-  innateTechniques    InnateTechnique[]
-  bindingVows         BindingVow[]
-  domainState         DomainState?
-  combatStatuses      CombatStatus[]
-  blackFlashState     BlackFlashState?
-  blessings           CharacterBlessing[]
-  curses              CharacterCurse[]
-  statGroups          StatGroup[]
-  roomParticipants    RoomParticipant[]
-  characterAppearance CharacterAppearance?
+  cursedStats      CursedStats?
+  innateTechniques InnateTechnique[]
+  bindingVows      BindingVow[]
+  domainState      DomainState?
+  combatStatuses   CombatStatus[]
+  blackFlashState  BlackFlashState?
+  blessings        CharacterBlessing[]
+  curses           CharacterCurse[]
+  statGroups       StatGroup[]
 
   @@map("character")
 }
@@ -333,14 +326,11 @@ model CombatStatus {
 }
 
 model Combat {
-  id          Int      @id @default(autoincrement())
-  roomId      Int?
-  sceneId     Int?
-  sceneKey    String?
-  scenePackId String?
-  name        String?
-  isActive    Boolean  @default(true)
-  created_at  DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  roomId     Int?
+  name       String?
+  isActive   Boolean  @default(true)
+  created_at DateTime @default(now())
 
   participants Json? // [1,2,3,4]
 
@@ -350,9 +340,8 @@ model Combat {
   turnOrder      Json? // [ids ordenados por iniciativa]
   actedThisRound Json? // [ids que já agiram nesta rodada]
 
-  room  Room?       @relation(fields: [roomId], references: [id])
-  scene Scene?      @relation(fields: [sceneId], references: [id])
-  logs  CombatLog[]
+  room Room?       @relation(fields: [roomId], references: [id])
+  logs CombatLog[]
 
   @@map("combat")
 }
@@ -399,59 +388,4 @@ model RoomParticipant {
   @@index([roomId])
   @@index([characterId])
   @@map("room_participant")
-}
-
-model VisualPack {
-  id           Int      @id @default(autoincrement())
-  packId       String   @unique
-  name         String
-  version      String
-  description  String?
-  manifestJson Json
-  basePath     String
-  isPublic     Boolean  @default(false)
-  createdBy    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  appearances CharacterAppearance[]
-  scenes      Scene[]
-
-  @@map("visual_pack")
-}
-
-model CharacterAppearance {
-  id           Int      @id @default(autoincrement())
-  characterId  Int      @unique
-  visualPackId Int?
-  packId       String?
-  skinKey      String   @default("default")
-  paletteKey   String?
-  scale        Float    @default(1.0)
-  offsetX      Int      @default(0)
-  offsetY      Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  character  Character   @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  visualPack VisualPack? @relation(fields: [visualPackId], references: [id], onDelete: SetNull)
-
-  @@map("character_appearance")
-}
-
-model Scene {
-  id           Int      @id @default(autoincrement())
-  sceneKey     String
-  name         String
-  visualPackId Int?
-  packId       String?
-  configJson   Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  visualPack VisualPack? @relation(fields: [visualPackId], references: [id], onDelete: SetNull)
-  combats    Combat[]
-
-  @@unique([sceneKey, packId])
-  @@map("scene")
 }

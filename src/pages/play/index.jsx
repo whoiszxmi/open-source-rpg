@@ -45,15 +45,7 @@ export default function Play() {
       const data = await postJSON("/api/auth/player/login", {
         access_code: code,
       });
-      if (data?.characterId) {
-        localStorage.setItem(
-          "rpg:lastCharacterId",
-          String(data.characterId),
-        );
-        await router.push(`/player/${data.characterId}`);
-      } else {
-        setErr("Personagem não encontrado.");
-      }
+      router.push(`/player/${data.characterId}`);
     } catch (ex) {
       setErr(ex.message || "Falha ao entrar");
     } finally {

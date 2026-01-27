@@ -1,4 +1,7 @@
-const { getActiveCombatContext } = require("../lib/combat");
+async function fetchActiveCombatContext(prisma, characterId) {
+  const module = await import("../lib/combat.js");
+  return module.getActiveCombatContext(prisma, characterId);
+}
 
 async function getPlayerSnapshot(prisma, characterId) {
   const cid = Number(characterId);
@@ -66,7 +69,10 @@ async function getPlayerSnapshot(prisma, characterId) {
     include: { curse: true },
   });
 
-  const { combatId, participants } = await getActiveCombatContext(prisma, cid);
+  const { combatId, participants } = await fetchActiveCombatContext(
+    prisma,
+    cid,
+  );
 
   let combatScene = null;
   let targets = [];
@@ -90,22 +96,11 @@ async function getPlayerSnapshot(prisma, characterId) {
       }));
     }
   } else {
-    const targetRows = await prisma.character.findMany({
+    targets = await prisma.character.findMany({
       where: { id: { not: cid } },
       select: { id: true, name: true, is_dead: true },
       orderBy: { id: "asc" },
     });
-    const targetIds = targetRows.map((row) => row.id);
-    const appearances = await prisma.characterAppearance.findMany({
-      where: { characterId: { in: targetIds } },
-    });
-    const appearanceMap = new Map(
-      appearances.map((row) => [row.characterId, row]),
-    );
-    targets = targetRows.map((row) => ({
-      ...row,
-      appearance: appearanceMap.get(row.id) || null,
-    }));
   }
 
   let combat = null;
@@ -190,11 +185,14 @@ async function getPlayerSnapshot(prisma, characterId) {
       : null,
     blessings: JSON.parse(JSON.stringify(blessings || [])),
     curses: JSON.parse(JSON.stringify(curses || [])),
-    appearance: appearance ? JSON.parse(JSON.stringify(appearance)) : null,
     computedModifiers,
   };
 }
 
 module.exports = {
+  getPlayerSnapshot,
+};
+
+module.exports.default = {
   getPlayerSnapshot,
 };

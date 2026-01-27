@@ -34,7 +34,7 @@ export default function Home() {
               </a>
             </Link>
 
-            <Link href="/dashboard" legacyBehavior>
+            <Link href="/dashboard/overview" legacyBehavior>
               <a className="group rounded-3xl border border-white/10 bg-white/5 p-8 transition hover:border-emerald-400/40 hover:bg-white/10">
                 <div className="text-sm text-white/60">Mestre</div>
                 <div className="mt-2 text-2xl font-semibold">Sou Mestre</div>

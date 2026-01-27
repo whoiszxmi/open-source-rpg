@@ -16,8 +16,8 @@ export default async function handler(req, res) {
       .json({ ok: false, error: "master_key_not_configured" });
   }
 
-  const { masterKey: providedKey } = req.body || {};
-  if (String(providedKey || "") !== String(masterKey)) {
+  const { key } = req.body || {};
+  if (String(key || "") !== String(masterKey)) {
     return res.status(401).json({ ok: false, error: "invalid_master_key" });
   }
 
