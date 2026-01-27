@@ -431,4 +431,39 @@ router.get("/participants/:combatId", async (req, res) => {
   }
 });
 
+// POST /combat/scene
+// body: { combatId, sceneId? , sceneKey?, scenePackId? }
+router.post("/scene", async (req, res) => {
+  try {
+    const { combatId, sceneId, sceneKey, scenePackId } = req.body || {};
+    const id = Number(combatId);
+    if (!id) {
+      return res.status(400).json({ ok: false, error: "missing_combatId" });
+    }
+
+    let resolvedSceneId = sceneId ? Number(sceneId) : null;
+    if (!resolvedSceneId && sceneKey) {
+      const scene = await prisma.scene.findFirst({
+        where: { sceneKey: String(sceneKey), packId: scenePackId || null },
+      });
+      resolvedSceneId = scene?.id || null;
+    }
+
+    const updated = await prisma.combat.update({
+      where: { id },
+      data: {
+        sceneId: resolvedSceneId,
+        sceneKey: sceneKey || null,
+        scenePackId: scenePackId || null,
+      },
+    });
+
+    return res.json({ ok: true, combat: updated });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
+
 module.exports = router;

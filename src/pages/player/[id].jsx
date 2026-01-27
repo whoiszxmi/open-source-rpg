@@ -455,6 +455,8 @@ export default function PlayerPage({ characterId, initial }) {
             </div>
 
             <div className="space-y-4 lg:col-span-2">
+              <CombatAnimationLayer snapshot={snapshot} combat={combatState} />
+
               <ActionBar
                 busy={busy}
                 onRoll={doRoll}

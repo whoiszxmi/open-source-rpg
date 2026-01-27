@@ -1,0 +1,46 @@
+{
+  "packId": "base_pack",
+  "name": "Base Pack",
+  "version": "1.0.0",
+  "description": "Pacote base de placeholders.",
+  "sprites": {
+    "default": {
+      "image": "sprites/placeholder.png",
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "animations": {
+        "idle": [0],
+        "hit": [0]
+      }
+    }
+  },
+  "fx": {
+    "spark": {
+      "image": "fx/spark.png",
+      "frameWidth": 32,
+      "frameHeight": 32,
+      "animations": {
+        "play": [0]
+      }
+    }
+  },
+  "scenes": {
+    "default": {
+      "background": "scenes/background.png"
+    }
+  },
+  "mappings": {
+    "default": {
+      "ATTACK": {
+        "actorAnim": "idle",
+        "targetAnim": "hit",
+        "fx": "spark"
+      },
+      "TECHNIQUE": {
+        "actorAnim": "idle",
+        "targetAnim": "hit",
+        "fx": "spark"
+      }
+    }
+  }
+}

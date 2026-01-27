@@ -30,6 +30,9 @@ const CombatStatusService = require("./services/CombatStatusService");
 const jujutsuRoutes = require("./routes/jujutsuRoutes");
 const statusRoutes = require("./routes/statusRoutes");
 const combatRoutes = require("./routes/combatRoutes");
+const visualPackRoutes = require("./routes/visualpacks/visualPackRoutes");
+const appearanceRoutes = require("./routes/visualpacks/appearanceRoutes");
+const sceneRoutes = require("./routes/visualpacks/sceneRoutes");
 
 const dev = process.env.NODE_ENV !== "production";
 
@@ -40,6 +43,9 @@ app.use(express.json());
 app.use("/jujutsu", jujutsuRoutes);
 app.use("/status", statusRoutes);
 app.use("/combat", combatRoutes);
+app.use("/visualpacks", visualPackRoutes);
+app.use("/characters", appearanceRoutes);
+app.use("/scenes", sceneRoutes);
 
 app.get("/player/:id/snapshot", async (req, res) => {
   try {
@@ -1145,6 +1151,20 @@ app.post("/combat/resolve", async (req, res) => {
 
     io.to(`combat_${combatId}`).emit("combat_resolved", payload);
 
+    if (combatId) {
+      io.to(`combat_${combatId}`).emit("combat:action", {
+        combatId: Number(combatId),
+        attackerId,
+        targetId,
+        action: body.techniqueId ? "TECHNIQUE" : "ATTACK",
+        techniqueId: body.techniqueId || null,
+        techniqueKey: body.techniqueKey || null,
+        hits,
+        damageApplied: Math.trunc(damageApplied),
+        createdAt: Date.now(),
+      });
+    }
+
     if (!blackFlashTriggered) {
       await BlackFlashService.tickTurn(prisma, attackerId);
     }
@@ -1186,6 +1206,9 @@ io.on("connect", (socket) => {
 nextApp.prepare().then(() => {
   SeedService.ensureBlessingsAndCurses(prisma).catch((e) => {
     console.error("[Seed] Failed to sync blessings/curses:", e);
+  });
+  SeedService.ensureBaseVisualPack(prisma).catch((e) => {
+    console.error("[Seed] Failed to sync base visual pack:", e);
   });
 
   app.all("*", (req, res) => nextHandler(req, res));
