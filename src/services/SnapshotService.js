@@ -1,4 +1,7 @@
-const { getActiveCombatContext } = require("../lib/combat");
+async function fetchActiveCombatContext(prisma, characterId) {
+  const module = await import("../lib/combat.js");
+  return module.getActiveCombatContext(prisma, characterId);
+}
 
 async function getPlayerSnapshot(prisma, characterId) {
   const cid = Number(characterId);
@@ -56,7 +59,10 @@ async function getPlayerSnapshot(prisma, characterId) {
     include: { curse: true },
   });
 
-  const { combatId, participants } = await getActiveCombatContext(prisma, cid);
+  const { combatId, participants } = await fetchActiveCombatContext(
+    prisma,
+    cid,
+  );
 
   let targets = [];
   if (participants.length > 0) {
@@ -68,6 +74,12 @@ async function getPlayerSnapshot(prisma, characterId) {
         orderBy: { id: "asc" },
       });
     }
+  } else {
+    targets = await prisma.character.findMany({
+      where: { id: { not: cid } },
+      select: { id: true, name: true, is_dead: true },
+      orderBy: { id: "asc" },
+    });
   }
 
   let combat = null;
@@ -133,5 +145,9 @@ async function getPlayerSnapshot(prisma, characterId) {
 }
 
 module.exports = {
+  getPlayerSnapshot,
+};
+
+module.exports.default = {
   getPlayerSnapshot,
 };
