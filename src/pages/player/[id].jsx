@@ -2,7 +2,12 @@ import React, { useCallback, useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 
-import socket, { joinDiceRoom, joinPortraitRoom } from "../../utils/socket";
+import socket, {
+  joinCombatRoom,
+  joinDiceRoom,
+  joinPortraitRoom,
+  joinSnapshotRoom,
+} from "../../utils/socket";
 import { prisma } from "../../database";
 import { postJSON } from "../../lib/api";
 
@@ -85,6 +90,8 @@ export default function PlayerPage({ characterId, initial }) {
 
     joinDiceRoom(characterId);
     joinPortraitRoom(characterId);
+    joinSnapshotRoom(characterId);
+    if (combatId) joinCombatRoom(combatId);
 
     const onHp = (data) => {
       if (Number(data.character_id) !== Number(characterId)) return;
@@ -131,12 +138,26 @@ export default function PlayerPage({ characterId, initial }) {
 
     socket.on("update_hit_points", onHp);
     socket.on("dice_roll", onDice);
+    socket.on("combat:update", (payload) => {
+      if (!payload?.combatId || payload.combatId !== combatId) return;
+      setSnapshot((prev) => ({
+        ...prev,
+        combat: payload.combat || prev?.combat,
+        combatId: payload.combatId || prev?.combatId,
+      }));
+    });
+    socket.on("snapshot:update", (payload) => {
+      if (payload?.characterId !== characterId) return;
+      refresh();
+    });
 
     return () => {
       socket.off("update_hit_points", onHp);
       socket.off("dice_roll", onDice);
+      socket.off("combat:update");
+      socket.off("snapshot:update");
     };
-  }, [characterId]);
+  }, [characterId, combatId, refresh]);
 
   // 1 refresh ao abrir
   useEffect(() => {
