@@ -36,7 +36,7 @@ export default function Play() {
       const data = await postJSON("/api/auth/player/login", {
         access_code: code,
       });
-      router.push("/player");
+      router.push(`/player/${data.characterId}`);
     } catch (ex) {
       setErr(ex.message || "Falha ao entrar");
     } finally {

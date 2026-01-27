@@ -11,11 +11,7 @@ import ActionBar from "../../components/player/ActionBar";
 import TechniqueList from "../../components/player/TechniqueList";
 import DomainPanel from "../../components/player/DomainPanel";
 import CombatFeed from "../../components/player/CombatFeed";
-import StatsPanel from "../../components/player/StatsPanel";
-import TraitsPanel from "../../components/player/TraitsPanel";
-import BlackFlashPanel from "../../components/player/BlackFlashPanel";
-import CombatContextPanel from "../../components/player/CombatContextPanel";
-import SnapshotService from "../../services/SnapshotService";
+import PlayerSheetPanel from "../../components/player/PlayerSheetPanel";
 
 
 export const getServerSideProps = async ({ params }) => {
@@ -414,23 +410,15 @@ export default function PlayerPage({ characterId, initial }) {
                 statuses={snapshot.statuses}
               />
 
-              <StatsPanel
+              <PlayerSheetPanel
                 statsPhysical={snapshot.statsPhysical}
                 statsJujutsu={snapshot.statsJujutsu}
                 statsMental={snapshot.statsMental}
                 statsExtra={snapshot.statsExtra}
-              />
-
-              <TraitsPanel
-                statsExtra={snapshot.statsExtra}
-                statsJujutsu={snapshot.statsJujutsu}
-                statsMental={snapshot.statsMental}
                 cursedStats={snapshot.cursedStats}
                 blessings={snapshot.blessings}
                 curses={snapshot.curses}
               />
-
-              <BlackFlashPanel blackFlashState={snapshot.blackFlashState} />
 
               <CombatContextPanel
                 combat={snapshot.combat}
