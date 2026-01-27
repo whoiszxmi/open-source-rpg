@@ -64,6 +64,15 @@ export default function PlayerHUD({
                 ? `Jogador: ${character.player_name}`
                 : "Modo Jogador"}
             </div>
+            <div className="mt-1 text-[11px] text-white/40">
+              Skin: {character?.appearance_key || "default"} • Idle:{" "}
+              {character?.idle_anim_key || "none"}
+            </div>
+            <div className="text-[11px] text-white/40">
+              Ataque: {character?.attack_anim_key || "none"} • Hit:{" "}
+              {character?.hit_anim_key || "none"} • Cena:{" "}
+              {character?.scene_key || "default"}
+            </div>
           </div>
         </div>
 
