@@ -7,8 +7,6 @@ const navItems = [
   { href: "/dashboard/characters", label: "Personagens" },
   { href: "/dashboard/combats", label: "Combates" },
   { href: "/dashboard/blessings", label: "Bênçãos & Maldições" },
-  { href: "/dashboard/visualpacks", label: "Visual Packs" },
-  { href: "/dashboard/scenes", label: "Cenários" },
   { href: "/dashboard/rules", label: "Regras" },
   { href: "/dashboard/settings", label: "Configurações" },
 ];

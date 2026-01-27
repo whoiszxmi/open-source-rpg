@@ -41,16 +41,8 @@ export default function DashboardCharacters({ characters }) {
                     Jogador: {ch.player_name || "—"}
                   </div>
                 </div>
-                <div className="flex items-center gap-3 text-xs text-white/60">
-                  <span>
-                    Nível {ch.level} • {ch.is_dead ? "Morto" : "Ativo"}
-                  </span>
-                  <a
-                    className="text-emerald-300"
-                    href={`/dashboard/characters/${ch.id}/appearance`}
-                  >
-                    Aparência
-                  </a>
+                <div className="text-xs text-white/60">
+                  Nível {ch.level} • {ch.is_dead ? "Morto" : "Ativo"}
                 </div>
               </div>
             ))
