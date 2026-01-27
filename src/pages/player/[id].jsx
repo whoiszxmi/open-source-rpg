@@ -420,6 +420,11 @@ export default function PlayerPage({ characterId, initial }) {
                 curses={snapshot.curses}
               />
 
+              <CombatContextPanel
+                combat={snapshot.combat}
+                combatId={combatId}
+                targets={snapshot.targets}
+              />
 
               <DomainPanel
                 domainState={snapshot.domainState}
