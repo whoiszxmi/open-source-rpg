@@ -147,3 +147,7 @@ async function getPlayerSnapshot(prisma, characterId) {
 module.exports = {
   getPlayerSnapshot,
 };
+
+module.exports.default = {
+  getPlayerSnapshot,
+};

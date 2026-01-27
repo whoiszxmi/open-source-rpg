@@ -5,7 +5,6 @@ import { useRouter } from "next/router";
 import socket, { joinDiceRoom, joinPortraitRoom } from "../../utils/socket";
 import { prisma } from "../../database";
 import { postJSON } from "../../lib/api";
-import { getActiveCombatContext } from "../../lib/combat";
 
 import PlayerHUD from "../../components/player/PlayerHUD";
 import ActionBar from "../../components/player/ActionBar";
@@ -20,76 +19,15 @@ export const getServerSideProps = async ({ params }) => {
 
   if (!characterId) return { props: { characterId: null, initial: null } };
 
-  const character = await prisma.character.findUnique({
-    where: { id: characterId },
-    select: {
-      id: true,
-      name: true,
-      player_name: true,
-      current_hit_points: true,
-      max_hit_points: true,
-      is_dead: true,
-      standard_character_picture_url: true,
-    },
-  });
-
-  if (!character) return { props: { characterId, initial: null } };
-
-  const cursedStats = await prisma.cursedStats.findUnique({
-    where: { characterId },
-  });
-
-  const domainState = await prisma.domainState.findUnique({
-    where: { characterId },
-  });
-
-  const statuses = await prisma.combatStatus.findMany({
-    where: { characterId },
-    orderBy: [{ kind: "asc" }, { key: "asc" }],
-  });
-
-  const techniques = await prisma.innateTechnique.findMany({
-    where: { characterId },
-    orderBy: { id: "asc" },
-  });
-
-  const { combatId, participants } = await getActiveCombatContext(
+  const snapshot = await SnapshotService.getPlayerSnapshot(
     prisma,
     characterId,
   );
 
-  let targets = [];
-  if (participants.length > 0) {
-    const targetIds = participants.filter(
-      (id) => Number(id) !== Number(characterId),
-    );
-    if (targetIds.length > 0) {
-      targets = await prisma.character.findMany({
-        where: { id: { in: targetIds } },
-        select: { id: true, name: true, is_dead: true },
-        orderBy: { id: "asc" },
-      });
-    }
-  } else {
-    targets = await prisma.character.findMany({
-      where: { id: { not: characterId } },
-      select: { id: true, name: true, is_dead: true },
-      orderBy: { id: "asc" },
-    });
-  }
-
   return {
     props: {
       characterId,
-      initial: {
-        character: JSON.parse(JSON.stringify(character)),
-        cursedStats: cursedStats ? JSON.parse(JSON.stringify(cursedStats)) : null,
-        domainState: domainState ? JSON.parse(JSON.stringify(domainState)) : null,
-        statuses: JSON.parse(JSON.stringify(statuses || [])),
-        techniques: JSON.parse(JSON.stringify(techniques || [])),
-        targets: JSON.parse(JSON.stringify(targets || [])),
-        combatId: combatId || null,
-      },
+      initial: snapshot ? JSON.parse(JSON.stringify(snapshot)) : null,
     },
   };
 };
