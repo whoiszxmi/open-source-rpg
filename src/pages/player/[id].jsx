@@ -2,17 +2,25 @@ import React, { useCallback, useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 
-import socket, { joinDiceRoom, joinPortraitRoom } from "../../utils/socket";
+import socket, {
+  joinCombatRoom,
+  joinDiceRoom,
+  joinPortraitRoom,
+  joinSnapshotRoom,
+} from "../../utils/socket";
 import { prisma } from "../../database";
 import { postJSON } from "../../lib/api";
-import { getActiveCombatContext } from "../../lib/combat";
 
 import PlayerHUD from "../../components/player/PlayerHUD";
 import ActionBar from "../../components/player/ActionBar";
 import TechniqueList from "../../components/player/TechniqueList";
 import DomainPanel from "../../components/player/DomainPanel";
 import CombatFeed from "../../components/player/CombatFeed";
-import CharacterProgressPanel from "../../components/player/CharacterProgressPanel";
+import StatsPanel from "../../components/player/StatsPanel";
+import TraitsPanel from "../../components/player/TraitsPanel";
+import BlackFlashPanel from "../../components/player/BlackFlashPanel";
+import CombatContextPanel from "../../components/player/CombatContextPanel";
+import SnapshotService from "../../services/SnapshotService";
 
 
 export const getServerSideProps = async ({ params }) => {
@@ -20,76 +28,15 @@ export const getServerSideProps = async ({ params }) => {
 
   if (!characterId) return { props: { characterId: null, initial: null } };
 
-  const character = await prisma.character.findUnique({
-    where: { id: characterId },
-    select: {
-      id: true,
-      name: true,
-      player_name: true,
-      current_hit_points: true,
-      max_hit_points: true,
-      is_dead: true,
-      standard_character_picture_url: true,
-    },
-  });
-
-  if (!character) return { props: { characterId, initial: null } };
-
-  const cursedStats = await prisma.cursedStats.findUnique({
-    where: { characterId },
-  });
-
-  const domainState = await prisma.domainState.findUnique({
-    where: { characterId },
-  });
-
-  const statuses = await prisma.combatStatus.findMany({
-    where: { characterId },
-    orderBy: [{ kind: "asc" }, { key: "asc" }],
-  });
-
-  const techniques = await prisma.innateTechnique.findMany({
-    where: { characterId },
-    orderBy: { id: "asc" },
-  });
-
-  const { combatId, participants } = await getActiveCombatContext(
+  const snapshot = await SnapshotService.getPlayerSnapshot(
     prisma,
     characterId,
   );
 
-  let targets = [];
-  if (participants.length > 0) {
-    const targetIds = participants.filter(
-      (id) => Number(id) !== Number(characterId),
-    );
-    if (targetIds.length > 0) {
-      targets = await prisma.character.findMany({
-        where: { id: { in: targetIds } },
-        select: { id: true, name: true, is_dead: true },
-        orderBy: { id: "asc" },
-      });
-    }
-  } else {
-    targets = await prisma.character.findMany({
-      where: { id: { not: characterId } },
-      select: { id: true, name: true, is_dead: true },
-      orderBy: { id: "asc" },
-    });
-  }
-
   return {
     props: {
       characterId,
-      initial: {
-        character: JSON.parse(JSON.stringify(character)),
-        cursedStats: cursedStats ? JSON.parse(JSON.stringify(cursedStats)) : null,
-        domainState: domainState ? JSON.parse(JSON.stringify(domainState)) : null,
-        statuses: JSON.parse(JSON.stringify(statuses || [])),
-        techniques: JSON.parse(JSON.stringify(techniques || [])),
-        targets: JSON.parse(JSON.stringify(targets || [])),
-        combatId: combatId || null,
-      },
+      initial: snapshot ? JSON.parse(JSON.stringify(snapshot)) : null,
     },
   };
 };
@@ -147,6 +94,8 @@ export default function PlayerPage({ characterId, initial }) {
 
     joinDiceRoom(characterId);
     joinPortraitRoom(characterId);
+    joinSnapshotRoom(characterId);
+    if (combatId) joinCombatRoom(combatId);
 
     const onHp = (data) => {
       if (Number(data.character_id) !== Number(characterId)) return;
@@ -193,12 +142,26 @@ export default function PlayerPage({ characterId, initial }) {
 
     socket.on("update_hit_points", onHp);
     socket.on("dice_roll", onDice);
+    socket.on("combat:update", (payload) => {
+      if (!payload?.combatId || payload.combatId !== combatId) return;
+      setSnapshot((prev) => ({
+        ...prev,
+        combat: payload.combat || prev?.combat,
+        combatId: payload.combatId || prev?.combatId,
+      }));
+    });
+    socket.on("snapshot:update", (payload) => {
+      if (payload?.characterId !== characterId) return;
+      refresh();
+    });
 
     return () => {
       socket.off("update_hit_points", onHp);
       socket.off("dice_roll", onDice);
+      socket.off("combat:update");
+      socket.off("snapshot:update");
     };
-  }, [characterId]);
+  }, [characterId, combatId, refresh]);
 
   // 1 refresh ao abrir
   useEffect(() => {
@@ -472,15 +435,29 @@ export default function PlayerPage({ characterId, initial }) {
                 statuses={snapshot.statuses}
               />
 
-              <CharacterProgressPanel
-  statsPhysical={snapshot.statsPhysical}
-  statsJujutsu={snapshot.statsJujutsu}
-  statsMental={snapshot.statsMental}
-  statsExtra={snapshot.statsExtra}
-  blessings={snapshot.blessings}
-  curses={snapshot.curses}
-/>
+              <StatsPanel
+                statsPhysical={snapshot.statsPhysical}
+                statsJujutsu={snapshot.statsJujutsu}
+                statsMental={snapshot.statsMental}
+                statsExtra={snapshot.statsExtra}
+              />
 
+              <TraitsPanel
+                statsExtra={snapshot.statsExtra}
+                statsJujutsu={snapshot.statsJujutsu}
+                statsMental={snapshot.statsMental}
+                cursedStats={snapshot.cursedStats}
+                blessings={snapshot.blessings}
+                curses={snapshot.curses}
+              />
+
+              <BlackFlashPanel blackFlashState={snapshot.blackFlashState} />
+
+              <CombatContextPanel
+                combat={snapshot.combat}
+                combatId={combatId}
+                targets={snapshot.targets}
+              />
 
               <DomainPanel
                 domainState={snapshot.domainState}

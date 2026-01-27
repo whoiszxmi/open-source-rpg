@@ -15,14 +15,35 @@ function isNumberArray(a) {
 }
 
 // POST /combat/start
-// body: { name?: string, participants?: number[] }
+// body: { name?: string, participants?: number[], roomCode?: string }
 router.post("/start", async (req, res) => {
   try {
-    const { name, participants } = req.body || {};
+    const { name, participants, roomCode } = req.body || {};
+    let resolvedParticipants = Array.isArray(participants) ? participants : null;
+    let roomId = null;
+
+    if (roomCode) {
+      const room = await prisma.room.findUnique({
+        where: { code: String(roomCode).trim() },
+        select: { id: true },
+      });
+      if (!room) {
+        return res.status(404).json({ ok: false, error: "room_not_found" });
+      }
+
+      const rows = await prisma.roomParticipant.findMany({
+        where: { roomId: room.id },
+        select: { characterId: true },
+      });
+      resolvedParticipants = rows.map((row) => row.characterId);
+      roomId = room.id;
+    }
+
     const combat = await prisma.combat.create({
       data: {
         name: name || null,
-        participants: Array.isArray(participants) ? participants : null,
+        roomId,
+        participants: resolvedParticipants || null,
         roundNumber: 1,
         turnIndex: 0,
         turnOrder: null,
@@ -313,6 +334,12 @@ router.post("/next", async (req, res) => {
       .status(500)
       .json({ ok: false, error: "internal_error", details: String(e) });
   }
+});
+
+// POST /combat/turn (alias do /next)
+router.post("/turn", async (req, res, next) => {
+  req.url = "/next";
+  return router.handle(req, res, next);
 });
 
 // GET /combat/log/:combatId

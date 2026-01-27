@@ -1,4 +1,7 @@
-const { getActiveCombatContext } = require("../lib/combat");
+async function fetchActiveCombatContext(prisma, characterId) {
+  const module = await import("../lib/combat.js");
+  return module.getActiveCombatContext(prisma, characterId);
+}
 
 async function getPlayerSnapshot(prisma, characterId) {
   const cid = Number(characterId);
@@ -56,7 +59,10 @@ async function getPlayerSnapshot(prisma, characterId) {
     include: { curse: true },
   });
 
-  const { combatId, participants } = await getActiveCombatContext(prisma, cid);
+  const { combatId, participants } = await fetchActiveCombatContext(
+    prisma,
+    cid,
+  );
 
   let targets = [];
   if (participants.length > 0) {
@@ -68,6 +74,12 @@ async function getPlayerSnapshot(prisma, characterId) {
         orderBy: { id: "asc" },
       });
     }
+  } else {
+    targets = await prisma.character.findMany({
+      where: { id: { not: cid } },
+      select: { id: true, name: true, is_dead: true },
+      orderBy: { id: "asc" },
+    });
   }
 
   let combat = null;
@@ -100,6 +112,20 @@ async function getPlayerSnapshot(prisma, characterId) {
     return acc;
   }, {});
 
+  const computedModifiers = { stats: {} };
+  const traitSources = [
+    ...blessings.map((b) => b?.blessing),
+    ...curses.map((c) => c?.curse),
+  ].filter(Boolean);
+
+  for (const trait of traitSources) {
+    const stats = trait?.effects?.stats || {};
+    for (const [key, value] of Object.entries(stats)) {
+      const current = Number(computedModifiers.stats[key] || 0);
+      computedModifiers.stats[key] = current + Number(value || 0);
+    }
+  }
+
   return {
     ok: true,
     characterId: cid,
@@ -129,9 +155,14 @@ async function getPlayerSnapshot(prisma, characterId) {
       : null,
     blessings: JSON.parse(JSON.stringify(blessings || [])),
     curses: JSON.parse(JSON.stringify(curses || [])),
+    computedModifiers,
   };
 }
 
 module.exports = {
+  getPlayerSnapshot,
+};
+
+module.exports.default = {
   getPlayerSnapshot,
 };
