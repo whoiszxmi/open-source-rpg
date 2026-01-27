@@ -12,7 +12,7 @@ import ActionBar from "../../components/player/ActionBar";
 import TechniqueList from "../../components/player/TechniqueList";
 import DomainPanel from "../../components/player/DomainPanel";
 import CombatFeed from "../../components/player/CombatFeed";
-import CharacterProgressPanel from "../../components/player/CharacterProgressPanel";
+import PlayerSheetPanel from "../../components/player/PlayerSheetPanel";
 
 
 export const getServerSideProps = async ({ params }) => {
@@ -472,14 +472,15 @@ export default function PlayerPage({ characterId, initial }) {
                 statuses={snapshot.statuses}
               />
 
-              <CharacterProgressPanel
-  statsPhysical={snapshot.statsPhysical}
-  statsJujutsu={snapshot.statsJujutsu}
-  statsMental={snapshot.statsMental}
-  statsExtra={snapshot.statsExtra}
-  blessings={snapshot.blessings}
-  curses={snapshot.curses}
-/>
+              <PlayerSheetPanel
+                statsPhysical={snapshot.statsPhysical}
+                statsJujutsu={snapshot.statsJujutsu}
+                statsMental={snapshot.statsMental}
+                statsExtra={snapshot.statsExtra}
+                cursedStats={snapshot.cursedStats}
+                blessings={snapshot.blessings}
+                curses={snapshot.curses}
+              />
 
 
               <DomainPanel
