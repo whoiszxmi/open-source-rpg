@@ -15,14 +15,35 @@ function isNumberArray(a) {
 }
 
 // POST /combat/start
-// body: { name?: string, participants?: number[] }
+// body: { name?: string, participants?: number[], roomCode?: string }
 router.post("/start", async (req, res) => {
   try {
-    const { name, participants } = req.body || {};
+    const { name, participants, roomCode } = req.body || {};
+    let resolvedParticipants = Array.isArray(participants) ? participants : null;
+    let roomId = null;
+
+    if (roomCode) {
+      const room = await prisma.room.findUnique({
+        where: { code: String(roomCode).trim() },
+        select: { id: true },
+      });
+      if (!room) {
+        return res.status(404).json({ ok: false, error: "room_not_found" });
+      }
+
+      const rows = await prisma.roomParticipant.findMany({
+        where: { roomId: room.id },
+        select: { characterId: true },
+      });
+      resolvedParticipants = rows.map((row) => row.characterId);
+      roomId = room.id;
+    }
+
     const combat = await prisma.combat.create({
       data: {
         name: name || null,
-        participants: Array.isArray(participants) ? participants : null,
+        roomId,
+        participants: resolvedParticipants || null,
         roundNumber: 1,
         turnIndex: 0,
         turnOrder: null,
@@ -315,6 +336,12 @@ router.post("/next", async (req, res) => {
   }
 });
 
+// POST /combat/turn (alias do /next)
+router.post("/turn", async (req, res, next) => {
+  req.url = "/next";
+  return router.handle(req, res, next);
+});
+
 // GET /combat/log/:combatId
 router.get("/log/:combatId", async (req, res) => {
   try {
@@ -397,6 +424,41 @@ router.get("/participants/:combatId", async (req, res) => {
       currentActorId,
       participants: ordered,
     });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
+
+// POST /combat/scene
+// body: { combatId, sceneId? , sceneKey?, scenePackId? }
+router.post("/scene", async (req, res) => {
+  try {
+    const { combatId, sceneId, sceneKey, scenePackId } = req.body || {};
+    const id = Number(combatId);
+    if (!id) {
+      return res.status(400).json({ ok: false, error: "missing_combatId" });
+    }
+
+    let resolvedSceneId = sceneId ? Number(sceneId) : null;
+    if (!resolvedSceneId && sceneKey) {
+      const scene = await prisma.scene.findFirst({
+        where: { sceneKey: String(sceneKey), packId: scenePackId || null },
+      });
+      resolvedSceneId = scene?.id || null;
+    }
+
+    const updated = await prisma.combat.update({
+      where: { id },
+      data: {
+        sceneId: resolvedSceneId,
+        sceneKey: sceneKey || null,
+        scenePackId: scenePackId || null,
+      },
+    });
+
+    return res.json({ ok: true, combat: updated });
   } catch (e) {
     return res
       .status(500)

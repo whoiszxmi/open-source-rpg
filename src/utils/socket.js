@@ -72,3 +72,9 @@ export function joinCombatRoom(combatId) {
   if (!s || !combatId) return;
   s.emit("room:join", `combat_${Number(combatId)}`);
 }
+
+export function joinSnapshotRoom(characterId) {
+  const s = getSocket();
+  if (!s || !characterId) return;
+  s.emit("snapshot:join", Number(characterId));
+}
