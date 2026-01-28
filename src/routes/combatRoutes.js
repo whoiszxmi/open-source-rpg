@@ -14,20 +14,180 @@ function isNumberArray(a) {
   return Array.isArray(a) && a.every((x) => Number.isFinite(Number(x)));
 }
 
+function shuffle(values) {
+  const arr = [...values];
+  for (let i = arr.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 // POST /combat/start
-// body: { name?: string, participants?: number[] }
+// body: { name?: string, participants?: number[], roomCode?: string, scenarioId?: number, players?: number[], enemies?: number[] }
 router.post("/start", async (req, res) => {
   try {
-    const { name, participants } = req.body || {};
+    const { name, participants, roomCode, scenarioId, players, enemies } = req.body || {};
+    let resolvedParticipants = Array.isArray(participants) ? participants : null;
+    let roomId = null;
+    let playerIds = Array.isArray(players) ? players.map(Number).filter(Number.isFinite) : [];
+    let enemyIds = Array.isArray(enemies) ? enemies.map(Number).filter(Number.isFinite) : [];
+    let enemyCharacterIds = [];
+
+    if (roomCode) {
+      const room = await prisma.room.findUnique({
+        where: { code: String(roomCode).trim() },
+        select: { id: true },
+      });
+      if (!room) {
+        return res.status(404).json({ ok: false, error: "room_not_found" });
+      }
+
+      const rows = await prisma.roomParticipant.findMany({
+        where: { roomId: room.id },
+        select: { characterId: true },
+      });
+      resolvedParticipants = rows.map((row) => row.characterId);
+      roomId = room.id;
+    }
+
+    if (playerIds.length > 0 || enemyIds.length > 0) {
+      resolvedParticipants = playerIds;
+      if (enemyIds.length > 0) {
+        const templates = await prisma.enemyTemplate.findMany({
+          where: { id: { in: enemyIds } },
+        });
+        for (const template of templates) {
+          const hp = Number(template?.baseStatsJson?.hp || 0);
+          const npc = await prisma.character.create({
+            data: {
+              name: template.name,
+              is_npc: true,
+              max_hit_points: hp,
+              current_hit_points: hp,
+            },
+          });
+          enemyCharacterIds.push(npc.id);
+        }
+        resolvedParticipants = [...resolvedParticipants, ...enemyCharacterIds];
+      }
+    }
+
+    const ordered = resolvedParticipants
+      ? shuffle(resolvedParticipants.map(Number))
+      : null;
+
     const combat = await prisma.combat.create({
       data: {
         name: name || null,
-        participants: Array.isArray(participants) ? participants : null,
+        roomId,
+        scenarioId: scenarioId ? Number(scenarioId) : null,
+        participants: resolvedParticipants || null,
         roundNumber: 1,
         turnIndex: 0,
+        turnOrder: ordered,
+        actedThisRound: [],
+        isActive: true,
+      },
+    });
+
+    if (playerIds.length > 0 || enemyIds.length > 0) {
+      const rows = [
+        ...playerIds.map((id) => ({
+          combatId: combat.id,
+          entityType: "CHARACTER",
+          entityId: id,
+          team: "PLAYERS",
+        })),
+        ...enemyIds.map((id) => ({
+          combatId: combat.id,
+          entityType: "ENEMY",
+          entityId: id,
+          team: "ENEMIES",
+        })),
+      ];
+      if (rows.length > 0) {
+        await prisma.combatParticipant.createMany({ data: rows });
+      }
+    }
+
+    if (playerIds.length > 0) {
+      await prisma.playerSession.updateMany({
+        where: { characterId: { in: playerIds } },
+        data: { combatId: combat.id },
+      });
+    }
+
+    return res.json({ ok: true, combat });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
+
+// POST /combat/join
+// body: { combatId: number, entityType: string, entityId: number }
+router.post("/join", async (req, res) => {
+  try {
+    const { combatId, entityType, entityId, team } = req.body || {};
+    if (!combatId || !entityType || !entityId) {
+      return res.status(400).json({ ok: false, error: "missing_fields" });
+    }
+
+    const combat = await prisma.combat.findUnique({
+      where: { id: Number(combatId) },
+    });
+    if (!combat) {
+      return res.status(404).json({ ok: false, error: "combat_not_found" });
+    }
+
+    const participants = Array.isArray(combat.participants)
+      ? combat.participants.map(Number)
+      : [];
+    if (!participants.includes(Number(entityId))) {
+      participants.push(Number(entityId));
+    }
+
+    const updated = await prisma.combat.update({
+      where: { id: Number(combatId) },
+      data: {
+        participants,
         turnOrder: null,
+        turnIndex: 0,
+        roundNumber: 1,
         actedThisRound: [],
       },
+    });
+
+    await prisma.combatParticipant.create({
+      data: {
+        combatId: updated.id,
+        entityType: String(entityType).toUpperCase(),
+        entityId: Number(entityId),
+        team: team ? String(team).toUpperCase() : "PLAYERS",
+      },
+    });
+
+    return res.json({ ok: true, combat: updated });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
+
+// POST /combat/end
+// body: { combatId: number }
+router.post("/end", async (req, res) => {
+  try {
+    const { combatId } = req.body || {};
+    if (!combatId) {
+      return res.status(400).json({ ok: false, error: "missing_combatId" });
+    }
+    const combat = await prisma.combat.update({
+      where: { id: Number(combatId) },
+      data: { isActive: false },
     });
     return res.json({ ok: true, combat });
   } catch (e) {
@@ -87,6 +247,7 @@ router.get("/state/:combatId", async (req, res) => {
         turnIndex: true,
         turnOrder: true,
         actedThisRound: true,
+        scenarioId: true,
       },
     });
 
@@ -96,7 +257,20 @@ router.get("/state/:combatId", async (req, res) => {
     const order = Array.isArray(combat.turnOrder) ? combat.turnOrder : null;
     const currentActorId = order ? order[combat.turnIndex] : null;
 
-    return res.json({ ok: true, combat, currentActorId });
+    const scenario = combat.scenarioId
+      ? await prisma.scenario.findUnique({ where: { id: combat.scenarioId } })
+      : null;
+    const participantsRows = await prisma.combatParticipant.findMany({
+      where: { combatId },
+    });
+
+    return res.json({
+      ok: true,
+      combat,
+      currentActorId,
+      scenario: scenario ? JSON.parse(JSON.stringify(scenario)) : null,
+      participants: JSON.parse(JSON.stringify(participantsRows || [])),
+    });
   } catch (e) {
     return res
       .status(500)
@@ -315,6 +489,12 @@ router.post("/next", async (req, res) => {
   }
 });
 
+// POST /combat/turn (alias do /next)
+router.post("/turn", async (req, res, next) => {
+  req.url = "/next";
+  return router.handle(req, res, next);
+});
+
 // GET /combat/log/:combatId
 router.get("/log/:combatId", async (req, res) => {
   try {
@@ -397,6 +577,41 @@ router.get("/participants/:combatId", async (req, res) => {
       currentActorId,
       participants: ordered,
     });
+  } catch (e) {
+    return res
+      .status(500)
+      .json({ ok: false, error: "internal_error", details: String(e) });
+  }
+});
+
+// POST /combat/scene
+// body: { combatId, sceneId? , sceneKey?, scenePackId? }
+router.post("/scene", async (req, res) => {
+  try {
+    const { combatId, sceneId, sceneKey, scenePackId } = req.body || {};
+    const id = Number(combatId);
+    if (!id) {
+      return res.status(400).json({ ok: false, error: "missing_combatId" });
+    }
+
+    let resolvedSceneId = sceneId ? Number(sceneId) : null;
+    if (!resolvedSceneId && sceneKey) {
+      const scene = await prisma.scene.findFirst({
+        where: { sceneKey: String(sceneKey), packId: scenePackId || null },
+      });
+      resolvedSceneId = scene?.id || null;
+    }
+
+    const updated = await prisma.combat.update({
+      where: { id },
+      data: {
+        sceneId: resolvedSceneId,
+        sceneKey: sceneKey || null,
+        scenePackId: scenePackId || null,
+      },
+    });
+
+    return res.json({ ok: true, combat: updated });
   } catch (e) {
     return res
       .status(500)

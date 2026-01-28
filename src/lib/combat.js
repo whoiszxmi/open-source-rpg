@@ -13,7 +13,7 @@ function parseParticipants(raw) {
   return [];
 }
 
-export async function getActiveCombatContext(prisma, characterId) {
+async function getActiveCombatContext(prisma, characterId) {
   if (!characterId) return { combatId: null, participants: [] };
 
   const rows = await prisma.$queryRaw`
@@ -35,3 +35,4 @@ export async function getActiveCombatContext(prisma, characterId) {
   };
 }
 
+module.exports = { getActiveCombatContext };

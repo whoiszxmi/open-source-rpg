@@ -16,6 +16,8 @@ Após instalar as dependências, gere o Prisma Client antes de subir o servidor:
 npx prisma generate
 ```
 
+> Nota: para evitar duplicações no `schema.prisma`, mantenha o format-on-save desativado para arquivos Prisma (veja `.vscode/settings.json`). 
+
 ### Recursos
 - ✔️ Ficha de personagem
 - ✔️ Painel do mestre para manipular o sistema

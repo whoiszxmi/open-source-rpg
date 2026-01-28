@@ -1,384 +1,101 @@
-import React, { useEffect, useState } from 'react';
-import Head from 'next/head';
-import { useRouter } from 'next/router';
-import { withStyles } from '@mui/styles';
-import { Grid, Container, Button, TextField } from '@mui/material';
-import {
-  Add as AddIcon
-} from '@mui/icons-material';
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/router";
+import LayoutMaster from "../../components/layout/LayoutMaster";
 
-import { Header, Section, CharacterBox, AddBox,
-  CreateCharacterModal, ConfirmationModal, EditableRow,
-  AttributeModal, SkillModal
-} from '../../components';
-
-import { api } from '../../utils';
-import useModal from '../../hooks/useModal';
-
-import { prisma } from '../../database';
-
-export const getServerSideProps = async () => {
-  function parseConfigs(array) {
-    return array.map(config => {
-      if(config.name === 'DICE_ON_SCREEN_TIMEOUT_IN_MS' || 'TIME_BETWEEN_DICES_IN_MS') {
-        return {
-          ...config,
-          value: parseInt(config.value) / 1000
-        }
-      }
-
-      return config;
-    });
-  }
-
-  const characters = await prisma.character.findMany({
-    orderBy: [
-      {
-        name: 'asc',
-      },
-    ],
-  });
-
-  const attributes = await prisma.attribute.findMany({
-    orderBy: [
-      {
-        name: 'asc',
-      },
-    ],
-  });
-
-  const skills = await prisma.skill.findMany({
-    orderBy: [
-      {
-        name: 'asc',
-      },
-    ],
-  });
-
-  const configs = await prisma.config.findMany();
-
-  const serializedCharacters = JSON.parse(JSON.stringify(characters));
-  const serializedAttributes = JSON.parse(JSON.stringify(attributes));
-  const serializedSkills = JSON.parse(JSON.stringify(skills));
-  const serializedConfigs = JSON.parse(JSON.stringify(parseConfigs(configs)));
-
-  return {
-    props: {
-      characters: serializedCharacters,
-      attributes: serializedAttributes,
-      skills: serializedSkills,
-      configs: serializedConfigs
-    },
-  };
-}
-
-function Dashboard({
-  classes,
-
-  characters,
-  attributes,
-  skills,
-  configs
-}) {
+export default function DashboardIndex() {
   const router = useRouter();
-
-  const [updatedConfigs, setUpdatedConfigs] = useState({
-    DICE_ON_SCREEN_TIMEOUT_IN_MS: null,
-    TIME_BETWEEN_DICES_IN_MS: null
-  });
+  const [lastTab, setLastTab] = useState(null);
 
   useEffect(() => {
-    configs.forEach(config => {
-      setUpdatedConfigs(prevState => ({
-        ...prevState,
-        [config.name]: config.value
-      }));
-    });
-  }, [configs]);
-
-  const refreshData = () => {
-    return router.replace(router.asPath);
-  }
-
-  const updateConfigs = () => {
-    api.put('/config/DICE_ON_SCREEN_TIMEOUT_IN_MS', {
-      value: `${parseInt(updatedConfigs.DICE_ON_SCREEN_TIMEOUT_IN_MS) * 1000}`
-    });
-
-    api.put('/config/TIME_BETWEEN_DICES_IN_MS', {
-      value: `${parseInt(updatedConfigs.TIME_BETWEEN_DICES_IN_MS) * 1000}`
-    });
-  }
-
-  const runInitialSetup = () => {
-    api.post('/setup')
-      .then(res => {
-        if(res.data.success) {
-          return window.location.reload();
-        }
-      });
-  }
-
-  const confirmationModal = useModal(({ close, custom }) => (
-    <ConfirmationModal
-      title={custom.title}
-      text={custom.text}
-      data={custom.data}
-      handleClose={close}
-      onConfirmation={(data) => {
-        const { id, type } = data;
-
-        api
-          .delete(`/${type}/${id}`)
-          .then(() => {
-            refreshData();
-          })
-          .catch(() => {
-            alert(`Erro ao apagar: ${type}`);
-          });
-      }}
-    />
-  ));
-
-  const createCharacterModal = useModal(({ close }) => (
-    <CreateCharacterModal
-      handleClose={close}
-      onCharacterCreated={() => {
-        refreshData();
-      }}
-    />
-  ));
-
-  const attributeModal = useModal(({ close, custom }) => (
-    <AttributeModal
-      handleClose={close}
-      data={custom.data || null}
-      onSubmit={() => {
-        refreshData();
-      }}
-      operation={custom.operation}
-    />
-  ));
-
-  const skillModal = useModal(({ close, custom }) => (
-    <SkillModal
-      handleClose={close}
-      data={custom.data || null}
-      onSubmit={() => {
-        refreshData();
-      }}
-      operation={custom.operation}
-    />
-  ));
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("rpg:master:lastTab");
+    if (stored && stored !== "/dashboard") {
+      setLastTab(stored);
+    }
+  }, []);
 
   return (
-    <>
-      <Container maxWidth="lg" style={{ marginBottom: '30px' }}>
-        <Head>
-          <title>Dashboard do Mestre | RPG</title>
-        </Head>
+    <LayoutMaster title="Hub do Mestre">
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="text-sm font-semibold">Atalhos rápidos</div>
+          <div className="mt-3 flex flex-wrap gap-3">
+            {lastTab ? (
+              <button
+                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
+                onClick={() => router.push(lastTab)}
+              >
+                Ir para última aba
+              </button>
+            ) : null}
+            <button
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
+              onClick={() => router.push("/dashboard/combat")}
+            >
+              Combate
+            </button>
+            <button
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
+              onClick={() => router.push("/dashboard/players")}
+            >
+              Jogadores
+            </button>
+            <button
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
+              onClick={() => router.push("/dashboard/uploads")}
+            >
+              Uploads/Assets
+            </button>
+            <button
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
+              onClick={() => router.push("/dashboard/entities")}
+            >
+              Entidades
+            </button>
+          </div>
+        </div>
 
-        <Grid container item spacing={3}>
-          <Header title="Dashboard do Mestre" />
+        <div className="grid gap-4 md:grid-cols-3">
+          <button
+            className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left"
+            onClick={() => router.push("/dashboard/combat")}
+          >
+            <div className="text-sm text-white/60">Combate</div>
+            <div className="mt-2 text-lg font-semibold">
+              Encontre combates ativos
+            </div>
+            <div className="mt-2 text-xs text-white/50">
+              Último combate e controle de rodada.
+            </div>
+          </button>
 
-          {
-            configs.length > 0 ? (
-              <>
-                <Grid item xs={12}>
-                  <Section
-                    title="Fichas e personagens"
-                  >
-                    <Grid item container xs={12} spacing={3}>
-                      {characters.map((character, index) => (
-                        <Grid item xs={12} md={4} key={index}>
-                          <CharacterBox
-                            character={character}
-                            deleteCharacter={() =>
-                              confirmationModal.appear({
-                                title: 'Apagar personagem',
-                                text: 'Deseja apagar este personagem?',
-                                data: { id: character.id, type: 'character' },
-                              })
-                            }
-                          />
-                        </Grid>
-                      ))}
-                      <Grid item xs={12} md={4}>
-                        <AddBox onClick={() => createCharacterModal.appear()} />
-                      </Grid>
-                    </Grid>
-                  </Section>
-                </Grid>
+          <button
+            className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left"
+            onClick={() => router.push("/dashboard/players")}
+          >
+            <div className="text-sm text-white/60">Jogadores</div>
+            <div className="mt-2 text-lg font-semibold">
+              Acompanhar sessões
+            </div>
+            <div className="mt-2 text-xs text-white/50">
+              Abra fichas e gerencie acessos.
+            </div>
+          </button>
 
-                <Grid item xs={12} md={6}>
-                  <Section
-                    title="Atributos"
-                    renderButton={() => (
-                      <Button
-                        variant="outlined"
-                        style={{
-                          display: 'flex',
-                          alignSelf: 'center',
-                        }}
-                        onClick={() => attributeModal.appear({ operation: 'create' })}
-                      >
-                        <AddIcon />
-                      </Button>
-                    )}
-                  >
-                    <Grid
-                      item
-                      container
-                      xs={12}
-                      spacing={2}
-                      className={classes.scrollableBox}
-                    >
-                      {attributes.map((attribute, index) => (
-                        <Grid item xs={12} key={index}>
-                          <EditableRow
-                            data={attribute}
-                            editRow={(data) => {
-                              attributeModal.appear({ operation: 'edit', data });
-                            }}
-                            deleteRow={(data) => {
-                              confirmationModal.appear({
-                                title: 'Apagar atributo',
-                                text: 'Deseja apagar este atributo?',
-                                data: { id: data.id, type: 'attribute' },
-                              });
-                            }}
-                          />
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </Section>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Section
-                    title="Perícias"
-                    renderButton={() => (
-                      <Button
-                        variant="outlined"
-                        style={{
-                          display: 'flex',
-                          alignSelf: 'center',
-                        }}
-                        onClick={() => skillModal.appear({ operation: 'create' })}
-                      >
-                        <AddIcon />
-                      </Button>
-                    )}
-                  >
-                    <Grid
-                      item
-                      container
-                      xs={12}
-                      spacing={2}
-                      className={classes.scrollableBox}
-                    >
-                      {skills.map((skill, index) => (
-                        <Grid item xs={12} key={index}>
-                          <EditableRow
-                            data={skill}
-                            editRow={(data) => {
-                              skillModal.appear({ operation: 'edit', data })
-                            }}
-                            deleteRow={(data) => {
-                              confirmationModal.appear({
-                                title: 'Apagar perícia',
-                                text: 'Deseja apagar esta perícia?',
-                                data: { id: data.id, type: 'skill' },
-                              });
-                            }}
-                          />
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </Section>
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Section
-                    title="Configurações"
-                  >
-                    <Grid
-                      item
-                      container
-                      xs={12}
-                      spacing={2}
-                    >
-                        <Grid container spacing={2} item xs={12}>
-                          <Grid item xs={12}>
-                            <h4>Integração com OBS</h4>
-                          </Grid>
-
-                          <Grid item xs={4}>
-                            <TextField
-                              fullWidth
-                              type="number"
-                              label="Tempo do dado em tela"
-                              helperText="Em segundos"
-                              value={updatedConfigs.DICE_ON_SCREEN_TIMEOUT_IN_MS}
-                              onChange={(e) => {
-                                const value = e.target.value;
-
-                                setUpdatedConfigs(prevState => ({
-                                  ...prevState,
-                                  DICE_ON_SCREEN_TIMEOUT_IN_MS: value
-                                }));
-                              }}
-                            />
-                          </Grid>
-
-                          <Grid item xs={4}>
-                            <TextField
-                              fullWidth
-                              type="number"
-                              label="Tempo entre cada dado"
-                              helperText="Em segundos"
-                              value={updatedConfigs.TIME_BETWEEN_DICES_IN_MS}
-                              onChange={(e) => {
-                                const value = e.target.value;
-
-                                setUpdatedConfigs(prevState => ({
-                                  ...prevState,
-                                  TIME_BETWEEN_DICES_IN_MS: value
-                                }));
-                              }}
-                            />
-                          </Grid>
-
-                          <Grid item xs={4}>
-                            <Button variant="contained" onClick={updateConfigs}>
-                              Salvar
-                            </Button>
-                          </Grid>
-                        </Grid>
-                    </Grid>
-                    </Section>
-                </Grid>
-              </>
-            ) : (
-              <Grid item xs={12}>
-                  <Button variant="contained" onClick={runInitialSetup} fullWidth>
-                    REALIZAR CONFIGURAÇÃO INICIAL
-                  </Button>
-              </Grid>
-            )
-          }
-        </Grid>
-      </Container>
-    </>
+          <button
+            className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left"
+            onClick={() => router.push("/dashboard/entities")}
+          >
+            <div className="text-sm text-white/60">Entidades</div>
+            <div className="mt-2 text-lg font-semibold">
+              Personagens e regras
+            </div>
+            <div className="mt-2 text-xs text-white/50">
+              Gerencie criaturas, cenários e regras.
+            </div>
+          </button>
+        </div>
+      </div>
+    </LayoutMaster>
   );
 }
-
-const styles = (theme) => ({
-  scrollableBox: {
-    overflow: 'auto',
-    maxHeight: '300px',
-    paddingRight: '10px',
-  },
-});
-
-export default withStyles(styles)(Dashboard);
