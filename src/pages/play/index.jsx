@@ -21,7 +21,24 @@ export async function getServerSideProps({ req }) {
   return { props: {} };
 }
 
-export default function Play() {
+export async function getServerSideProps({ req }) {
+  const cookies = parseCookies(req?.headers?.cookie || "");
+  if (cookies.psid) {
+    return {
+      redirect: { destination: "/play/session", permanent: false },
+    };
+  }
+
+  const characters = await prisma.character.findMany({
+    where: { is_npc: false },
+    select: { id: true, name: true, player_name: true },
+    orderBy: { name: "asc" },
+  });
+
+  return { props: { characters: JSON.parse(JSON.stringify(characters)) } };
+}
+
+export default function Play({ characters }) {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -137,6 +154,35 @@ export default function Play() {
                   aba pra overlay.
                 </div>
               </form>
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <div className="text-white/80 text-sm">Personagens disponíveis</div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {(characters || []).length === 0 ? (
+                  <div className="text-sm text-white/60">
+                    Nenhum personagem disponível no momento.
+                  </div>
+                ) : (
+                  characters.map((character) => (
+                    <button
+                      key={character.id}
+                      className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 hover:bg-white/10"
+                      onClick={() => onSelectCharacter(character.id)}
+                      disabled={busy}
+                    >
+                      <span>{character.name}</span>
+                      <span className="text-xs text-white/40">
+                        {character.player_name || "Jogador"}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
