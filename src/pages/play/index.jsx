@@ -4,9 +4,22 @@ import { useRouter } from "next/router";
 import Button from "../../components/ui/Button";
 import { Card, CardContent, CardHeader } from "../../components/ui/Card";
 import { postJSON } from "../../lib/api";
-import { parseCookies } from "../../lib/session";
-import { prisma } from "../../database";
+import { COOKIE_NAMES, getSessionFromRequest } from "../../lib/session";
 import LayoutPlayer from "../../components/layout/LayoutPlayer";
+
+export async function getServerSideProps({ req }) {
+  const session = await getSessionFromRequest(req, COOKIE_NAMES.player);
+  if (session?.characterId) {
+    return {
+      redirect: {
+        destination: `/player/${session.characterId}`,
+        permanent: false,
+      },
+    };
+  }
+
+  return { props: {} };
+}
 
 export async function getServerSideProps({ req }) {
   const cookies = parseCookies(req?.headers?.cookie || "");
@@ -46,31 +59,10 @@ export default function Play({ characters }) {
     setBusy(true);
 
     try {
-      const data = await postJSON("/api/play/login", {
+      const data = await postJSON("/api/auth/player/login", {
         access_code: code,
       });
-      if (data?.characterId) {
-        localStorage.setItem(
-          "rpg:lastCharacterId",
-          String(data.characterId),
-        );
-        await router.push(`/play/session`);
-      } else {
-        setErr("Personagem não encontrado.");
-      }
-    } catch (ex) {
-      setErr(ex.message || "Falha ao entrar");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onSelectCharacter(id) {
-    setErr("");
-    setBusy(true);
-    try {
-      await postJSON("/api/play/login", { characterId: id });
-      await router.push("/play/session");
+      router.push(`/player/${data.characterId}`);
     } catch (ex) {
       setErr(ex.message || "Falha ao entrar");
     } finally {
@@ -80,8 +72,7 @@ export default function Play({ characters }) {
 
   async function onContinue() {
     if (!lastCharacterId) return;
-    await postJSON("/api/play/login", { characterId: lastCharacterId });
-    await router.push("/play/session");
+    await router.push(`/player/${lastCharacterId}`);
   }
 
   function onResetLast() {

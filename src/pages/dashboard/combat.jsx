@@ -1,18 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { prisma } from "../../database";
 import LayoutMaster from "../../components/layout/LayoutMaster";
 
-export async function getServerSideProps() {
-  const combats = await prisma.combat.findMany({
-    select: { id: true, name: true, isActive: true, roundNumber: true },
-    orderBy: { id: "desc" },
-    take: 20,
-  });
-
-  return { props: { combats: JSON.parse(JSON.stringify(combats)) } };
-}
-
-export default function DashboardCombat({ combats }) {
+export default function DashboardCombat() {
   const [combatId, setCombatId] = useState("");
   const [storedCombatId, setStoredCombatId] = useState(null);
 
@@ -34,15 +23,6 @@ export default function DashboardCombat({ combats }) {
 
   return (
     <LayoutMaster title="Combate">
-      <div className="mb-4 flex flex-wrap gap-3">
-        <a
-          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
-          href="/dashboard/combat/new"
-        >
-          Novo combate
-        </a>
-      </div>
-
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="text-sm font-semibold">Último combate</div>
@@ -68,22 +48,11 @@ export default function DashboardCombat({ combats }) {
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <div className="text-sm font-semibold">Combates recentes</div>
+          <div className="text-sm font-semibold">Controles rápidos</div>
           <div className="mt-3 space-y-2 text-sm text-white/60">
-            {(combats || []).length === 0 ? (
-              <div>Nenhum combate criado ainda.</div>
-            ) : (
-              combats.map((combat) => (
-                <div key={combat.id} className="flex items-center justify-between">
-                  <span>
-                    #{combat.id} • {combat.name || "Sem nome"}
-                  </span>
-                  <span className="text-xs text-white/40">
-                    {combat.isActive ? "Ativo" : "Inativo"} • R{combat.roundNumber}
-                  </span>
-                </div>
-              ))
-            )}
+            <div>• Abra a lista completa em Combates.</div>
+            <div>• Defina o combate ativo para o grupo.</div>
+            <div>• Use logs e turnos para narrar a rodada.</div>
           </div>
         </div>
       </div>

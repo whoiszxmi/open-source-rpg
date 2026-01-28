@@ -1,19 +1,8 @@
 import React from "react";
 import { useRouter } from "next/router";
-import { prisma } from "../../database";
 import LayoutMaster from "../../components/layout/LayoutMaster";
 
-export async function getServerSideProps() {
-  const enemies = await prisma.character.findMany({
-    where: { is_npc: true },
-    select: { id: true, name: true, max_hit_points: true },
-    orderBy: { name: "asc" },
-  });
-
-  return { props: { enemies: JSON.parse(JSON.stringify(enemies)) } };
-}
-
-export default function DashboardEntities({ enemies }) {
+export default function DashboardEntities() {
   const router = useRouter();
 
   return (
@@ -30,29 +19,32 @@ export default function DashboardEntities({ enemies }) {
           >
             Abrir personagens
           </button>
-          <button
-            className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
-            onClick={() => router.push("/dashboard/entities/new")}
-          >
-            Novo inimigo
-          </button>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <div className="text-sm font-semibold">Inimigos cadastrados</div>
-          <div className="mt-3 space-y-2 text-sm text-white/60">
-            {(enemies || []).length === 0 ? (
-              <div>Nenhum inimigo cadastrado.</div>
-            ) : (
-              enemies.map((enemy) => (
-                <div key={enemy.id} className="flex items-center justify-between">
-                  <span>{enemy.name}</span>
-                  <span className="text-xs text-white/40">
-                    HP {enemy.max_hit_points}
-                  </span>
-                </div>
-              ))
-            )}
+          <div className="text-sm font-semibold">Regras e cenários</div>
+          <div className="mt-2 text-sm text-white/60">
+            Ajuste regras do sistema e cenários disponíveis.
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
+              onClick={() => router.push("/dashboard/rules")}
+            >
+              Regras
+            </button>
+            <button
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
+              onClick={() => router.push("/dashboard/scenes")}
+            >
+              Cenários
+            </button>
+            <button
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
+              onClick={() => router.push("/dashboard/blessings")}
+            >
+              Bênçãos
+            </button>
           </div>
         </div>
       </div>

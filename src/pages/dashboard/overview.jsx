@@ -22,8 +22,7 @@ export default function DashboardOverview() {
       <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="text-sm font-semibold">Resumo do sistema</div>
         <div className="mt-2 text-sm text-white/60">
-          Use as abas para gerenciar personagens, combates, packs visuais e
-          cenários.
+          Use as abas para gerenciar personagens, combates e regras.
         </div>
       </div>
     </LayoutMaster>
