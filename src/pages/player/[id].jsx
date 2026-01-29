@@ -34,6 +34,7 @@ export const getServerSideProps = async ({ params }) => {
     props: {
       characterId,
       initial: snapshot ? JSON.parse(JSON.stringify(snapshot)) : null,
+      initial: snapshot ? JSON.parse(JSON.stringify(snapshot)) : null,
     },
   };
 };
@@ -81,6 +82,7 @@ export default function PlayerPage({ characterId, initial }) {
       const data = await res.json();
       if (data?.ok) {
         setSnapshot(data);
+        setSnapshot(data);
       }
     } catch {
       // silencioso
@@ -93,6 +95,8 @@ export default function PlayerPage({ characterId, initial }) {
 
     joinDiceRoom(characterId);
     joinPortraitRoom(characterId);
+    joinSnapshotRoom(characterId);
+    if (combatId) joinCombatRoom(combatId);
     joinSnapshotRoom(characterId);
     if (combatId) joinCombatRoom(combatId);
 
@@ -153,13 +157,28 @@ export default function PlayerPage({ characterId, initial }) {
       if (payload?.characterId !== characterId) return;
       refresh();
     });
+    socket.on("combat:update", (payload) => {
+      if (!payload?.combatId || payload.combatId !== combatId) return;
+      setSnapshot((prev) => ({
+        ...prev,
+        combat: payload.combat || prev?.combat,
+        combatId: payload.combatId || prev?.combatId,
+      }));
+    });
+    socket.on("snapshot:update", (payload) => {
+      if (payload?.characterId !== characterId) return;
+      refresh();
+    });
 
     return () => {
       socket.off("update_hit_points", onHp);
       socket.off("dice_roll", onDice);
       socket.off("combat:update");
       socket.off("snapshot:update");
+      socket.off("combat:update");
+      socket.off("snapshot:update");
     };
+  }, [characterId, combatId, refresh]);
   }, [characterId, combatId, refresh]);
 
   // 1 refresh ao abrir
@@ -277,6 +296,7 @@ export default function PlayerPage({ characterId, initial }) {
       }
 
       await refresh();
+      await refresh();
       return r;
     } catch (e) {
       setFeed((f) => [...f, `❌ ${e.message || e}`].slice(-50));
@@ -349,6 +369,7 @@ export default function PlayerPage({ characterId, initial }) {
         }));
       }
 
+      await refresh();
       await refresh();
       return payload;
     } catch (e) {
@@ -466,6 +487,8 @@ export default function PlayerPage({ characterId, initial }) {
             </div>
 
             <div className="space-y-4 lg:col-span-2">
+              <CombatAnimationLayer snapshot={snapshot} combat={combatState} />
+
               <CombatAnimationLayer snapshot={snapshot} combat={combatState} />
 
               <ActionBar

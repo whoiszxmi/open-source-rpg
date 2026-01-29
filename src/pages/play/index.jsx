@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import Button from "../../components/ui/Button";
@@ -196,6 +197,7 @@ export default function Play({ characters }) {
       </Head>
 
       <LayoutPlayer title="Entrar como jogador" backHref="/">
+      <LayoutPlayer title="Entrar como jogador" backHref="/">
         <div className="mx-auto max-w-lg px-4 py-14">
           <div className="mb-6 flex gap-2">
             <button
@@ -295,12 +297,14 @@ export default function Play({ characters }) {
           <Card>
             <CardHeader>
               <div className="text-white/80 text-sm">Código ou ID</div>
+              <div className="text-white/80 text-sm">Código ou ID</div>
             </CardHeader>
             <CardContent>
               <form onSubmit={onEnter} className="space-y-3">
                 <input
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
+                  placeholder="ex: X7P-4K2 ou 12"
                   placeholder="ex: X7P-4K2 ou 12"
                   className="h-12 w-full rounded-2xl bg-black/30 border border-white/10 px-4 outline-none text-white placeholder:text-white/30"
                 />
@@ -377,6 +381,7 @@ export default function Play({ characters }) {
             </Card>
           )}
         </div>
+      </LayoutPlayer>
       </LayoutPlayer>
     </>
   );

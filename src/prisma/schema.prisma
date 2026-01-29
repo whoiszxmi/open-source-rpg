@@ -158,6 +158,8 @@ model StatGroup {
 
   character Character   @relation(fields: [characterId], references: [id], onDelete: Cascade)
   stats     StatValue[]
+  character Character   @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  stats     StatValue[]
 
   @@unique([characterId, type])
   @@index([characterId])
@@ -184,8 +186,11 @@ model Blessing {
   cost        Int
   category    String
   type        String?
+  type        String?
   description String?
   effects     Json
+  tags        Json?
+  excludes    Json?
   tags        Json?
   excludes    Json?
 
@@ -203,8 +208,12 @@ model Curse {
   category    String
   type        String?
   valueGain   Int?
+  type        String?
+  valueGain   Int?
   description String?
   effects     Json
+  tags        Json?
+  excludes    Json?
   tags        Json?
   excludes    Json?
 
@@ -215,8 +224,10 @@ model Curse {
 
 model CharacterBlessing {
   id          Int      @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   characterId Int
   blessingId  Int
+  createdAt   DateTime @default(now())
   createdAt   DateTime @default(now())
 
   character Character @relation(fields: [characterId], references: [id])
@@ -229,8 +240,10 @@ model CharacterBlessing {
 
 model CharacterCurse {
   id          Int      @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   characterId Int
   curseId     Int
+  createdAt   DateTime @default(now())
   createdAt   DateTime @default(now())
 
   character Character @relation(fields: [characterId], references: [id])

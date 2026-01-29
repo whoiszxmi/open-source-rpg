@@ -18,7 +18,10 @@ export default async function handler(req, res) {
         .json({ ok: false, error: "invalid_character_id" });
     }
 
-    const snapshot = await getPlayerSnapshot(prisma, characterId);
+    const snapshot = await SnapshotService.getPlayerSnapshot(
+      prisma,
+      characterId,
+    );
 
     if (!snapshot) {
       return res
