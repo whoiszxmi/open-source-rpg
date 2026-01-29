@@ -9,7 +9,10 @@ export default async function handler(req, res) {
     const {
       name,
       type,
-      fileUrl,
+      storage,
+      url,
+      mime,
+      size,
       spritesheetUrl,
       frameWidth,
       frameHeight,
@@ -17,7 +20,7 @@ export default async function handler(req, res) {
       meta,
     } = req.body || {};
 
-    if (!name || !type || !fileUrl) {
+    if (!name || !type || !url) {
       return res.status(400).json({ ok: false, error: "missing_fields" });
     }
 
@@ -25,7 +28,10 @@ export default async function handler(req, res) {
       data: {
         name: String(name),
         type: String(type),
-        fileUrl: String(fileUrl),
+        storage: storage ? String(storage) : "url",
+        url: String(url),
+        mime: mime ? String(mime) : null,
+        size: Number.isFinite(Number(size)) ? Number(size) : null,
         spritesheetUrl: spritesheetUrl ? String(spritesheetUrl) : null,
         frameWidth: Number.isFinite(Number(frameWidth)) ? Number(frameWidth) : null,
         frameHeight: Number.isFinite(Number(frameHeight)) ? Number(frameHeight) : null,

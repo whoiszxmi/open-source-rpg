@@ -8,7 +8,7 @@ import socket, {
   joinPortraitRoom,
   joinSnapshotRoom,
 } from "../../utils/socket";
-import { prisma } from "../../database";
+import { prisma } from "@/database";
 import { postJSON } from "../../lib/api";
 
 import PlayerHUD from "../../components/player/PlayerHUD";
@@ -16,22 +16,24 @@ import ActionBar from "../../components/player/ActionBar";
 import TechniqueList from "../../components/player/TechniqueList";
 import DomainPanel from "../../components/player/DomainPanel";
 import CombatFeed from "../../components/player/CombatFeed";
-import PlayerSheetPanel from "../../components/player/PlayerSheetPanel";
-
+import StatsPanel from "../../components/player/StatsPanel";
+import TraitsPanel from "../../components/player/TraitsPanel";
+import BlackFlashPanel from "../../components/player/BlackFlashPanel";
+import CombatContextPanel from "../../components/player/CombatContextPanel";
+import CombatAnimationLayer from "../../components/combat/CombatAnimationLayer";
+import { getPlayerSnapshot } from "@/services/SnapshotService";
 
 export const getServerSideProps = async ({ params }) => {
   const characterId = isNaN(params.id) ? null : Number(params.id);
 
   if (!characterId) return { props: { characterId: null, initial: null } };
 
-  const snapshot = await SnapshotService.getPlayerSnapshot(
-    prisma,
-    characterId,
-  );
+  const snapshot = await getPlayerSnapshot(prisma, characterId);
 
   return {
     props: {
       characterId,
+      initial: snapshot ? JSON.parse(JSON.stringify(snapshot)) : null,
       initial: snapshot ? JSON.parse(JSON.stringify(snapshot)) : null,
     },
   };
@@ -59,9 +61,18 @@ export default function PlayerPage({ characterId, initial }) {
   useEffect(() => {
     if (!characterId) return;
     if (typeof window === "undefined") return;
-    localStorage.setItem("rpg:lastCharacterId", String(characterId));
+    const token = typeof router.query?.token === "string" ? router.query.token : null;
+    localStorage.setItem(
+      "player_session",
+      JSON.stringify({
+        characterId,
+        token,
+        lastCombatId: combatId || null,
+        lastScenarioId: snapshot?.combat?.scenarioId || null,
+      }),
+    );
     localStorage.setItem("rpg:lastPlayerPath", router.asPath);
-  }, [characterId, router.asPath]);
+  }, [characterId, combatId, router.asPath, router.query?.token, snapshot?.combat?.scenarioId]);
 
   // ✅ Refresh real
   const refresh = useCallback(async () => {
@@ -70,6 +81,7 @@ export default function PlayerPage({ characterId, initial }) {
       const res = await fetch(`/api/player/${characterId}/snapshot`);
       const data = await res.json();
       if (data?.ok) {
+        setSnapshot(data);
         setSnapshot(data);
       }
     } catch {
@@ -83,6 +95,8 @@ export default function PlayerPage({ characterId, initial }) {
 
     joinDiceRoom(characterId);
     joinPortraitRoom(characterId);
+    joinSnapshotRoom(characterId);
+    if (combatId) joinCombatRoom(combatId);
     joinSnapshotRoom(characterId);
     if (combatId) joinCombatRoom(combatId);
 
@@ -143,13 +157,28 @@ export default function PlayerPage({ characterId, initial }) {
       if (payload?.characterId !== characterId) return;
       refresh();
     });
+    socket.on("combat:update", (payload) => {
+      if (!payload?.combatId || payload.combatId !== combatId) return;
+      setSnapshot((prev) => ({
+        ...prev,
+        combat: payload.combat || prev?.combat,
+        combatId: payload.combatId || prev?.combatId,
+      }));
+    });
+    socket.on("snapshot:update", (payload) => {
+      if (payload?.characterId !== characterId) return;
+      refresh();
+    });
 
     return () => {
       socket.off("update_hit_points", onHp);
       socket.off("dice_roll", onDice);
       socket.off("combat:update");
       socket.off("snapshot:update");
+      socket.off("combat:update");
+      socket.off("snapshot:update");
     };
+  }, [characterId, combatId, refresh]);
   }, [characterId, combatId, refresh]);
 
   // 1 refresh ao abrir
@@ -267,6 +296,7 @@ export default function PlayerPage({ characterId, initial }) {
       }
 
       await refresh();
+      await refresh();
       return r;
     } catch (e) {
       setFeed((f) => [...f, `❌ ${e.message || e}`].slice(-50));
@@ -339,6 +369,7 @@ export default function PlayerPage({ characterId, initial }) {
         }));
       }
 
+      await refresh();
       await refresh();
       return payload;
     } catch (e) {
@@ -424,15 +455,23 @@ export default function PlayerPage({ characterId, initial }) {
                 statuses={snapshot.statuses}
               />
 
-              <PlayerSheetPanel
+              <StatsPanel
                 statsPhysical={snapshot.statsPhysical}
                 statsJujutsu={snapshot.statsJujutsu}
                 statsMental={snapshot.statsMental}
                 statsExtra={snapshot.statsExtra}
+              />
+
+              <TraitsPanel
+                statsExtra={snapshot.statsExtra}
+                statsJujutsu={snapshot.statsJujutsu}
+                statsMental={snapshot.statsMental}
                 cursedStats={snapshot.cursedStats}
                 blessings={snapshot.blessings}
                 curses={snapshot.curses}
               />
+
+              <BlackFlashPanel blackFlashState={snapshot.blackFlashState} />
 
               <CombatContextPanel
                 combat={snapshot.combat}
@@ -448,6 +487,8 @@ export default function PlayerPage({ characterId, initial }) {
             </div>
 
             <div className="space-y-4 lg:col-span-2">
+              <CombatAnimationLayer snapshot={snapshot} combat={combatState} />
+
               <CombatAnimationLayer snapshot={snapshot} combat={combatState} />
 
               <ActionBar

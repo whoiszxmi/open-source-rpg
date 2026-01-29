@@ -64,9 +64,7 @@ export default async function handler(req, res) {
       }),
     );
 
-    return res
-      .status(200)
-      .json({ ok: true, characterId: character.id, token });
+    return res.status(200).json({ ok: true, characterId: character.id, token });
   } catch (e) {
     return res
       .status(500)

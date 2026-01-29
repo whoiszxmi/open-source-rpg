@@ -3,7 +3,7 @@ import { prisma } from "../../database";
 import LayoutMaster from "../../components/layout/LayoutMaster";
 
 export async function getServerSideProps() {
-  const scenarios = await prisma.scene.findMany({
+  const scenarios = await prisma.scenario.findMany({
     select: { id: true, name: true, backgroundAssetId: true },
     orderBy: { createdAt: "desc" },
   });

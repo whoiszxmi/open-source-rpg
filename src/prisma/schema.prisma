@@ -44,6 +44,12 @@ model Character {
   is_dead                        Boolean @default(false)
   standard_character_picture_url String?
   injured_character_picture_url  String?
+  appearance_key                 String?
+  idle_anim_key                  String?
+  attack_anim_key                String?
+  hit_anim_key                   String?
+  scene_key                      String?
+  is_npc                         Boolean @default(false)
   origin                         String? @db.VarChar(80)
   personalityTag                 String? @db.VarChar(60)
   bindingVow                     String? @db.VarChar(240)
@@ -61,15 +67,18 @@ model Character {
   // Jujutsu Edition (relações)
   // ============================
 
-  cursedStats      CursedStats?
-  innateTechniques InnateTechnique[]
-  bindingVows      BindingVow[]
-  domainState      DomainState?
-  combatStatuses   CombatStatus[]
-  blackFlashState  BlackFlashState?
-  blessings        CharacterBlessing[]
-  curses           CharacterCurse[]
-  statGroups       StatGroup[]
+  cursedStats         CursedStats?
+  innateTechniques    InnateTechnique[]
+  bindingVows         BindingVow[]
+  domainState         DomainState?
+  combatStatuses      CombatStatus[]
+  blackFlashState     BlackFlashState?
+  blessings           CharacterBlessing[]
+  curses              CharacterCurse[]
+  statGroups          StatGroup[]
+  roomParticipants    RoomParticipant[]
+  characterAppearance CharacterAppearance?
+  playerSessions      PlayerSession[]
 
   @@map("character")
 }
@@ -149,6 +158,8 @@ model StatGroup {
 
   character Character   @relation(fields: [characterId], references: [id], onDelete: Cascade)
   stats     StatValue[]
+  character Character   @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  stats     StatValue[]
 
   @@unique([characterId, type])
   @@index([characterId])
@@ -175,8 +186,11 @@ model Blessing {
   cost        Int
   category    String
   type        String?
+  type        String?
   description String?
   effects     Json
+  tags        Json?
+  excludes    Json?
   tags        Json?
   excludes    Json?
 
@@ -194,8 +208,12 @@ model Curse {
   category    String
   type        String?
   valueGain   Int?
+  type        String?
+  valueGain   Int?
   description String?
   effects     Json
+  tags        Json?
+  excludes    Json?
   tags        Json?
   excludes    Json?
 
@@ -206,8 +224,10 @@ model Curse {
 
 model CharacterBlessing {
   id          Int      @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   characterId Int
   blessingId  Int
+  createdAt   DateTime @default(now())
   createdAt   DateTime @default(now())
 
   character Character @relation(fields: [characterId], references: [id])
@@ -220,8 +240,10 @@ model CharacterBlessing {
 
 model CharacterCurse {
   id          Int      @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   characterId Int
   curseId     Int
+  createdAt   DateTime @default(now())
   createdAt   DateTime @default(now())
 
   character Character @relation(fields: [characterId], references: [id])
@@ -326,11 +348,15 @@ model CombatStatus {
 }
 
 model Combat {
-  id         Int      @id @default(autoincrement())
-  roomId     Int?
-  name       String?
-  isActive   Boolean  @default(true)
-  created_at DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  roomId      Int?
+  sceneId     Int?
+  scenarioId  Int?
+  sceneKey    String?
+  scenePackId String?
+  name        String?
+  isActive    Boolean  @default(true)
+  created_at  DateTime @default(now())
 
   participants Json? // [1,2,3,4]
 
@@ -340,8 +366,12 @@ model Combat {
   turnOrder      Json? // [ids ordenados por iniciativa]
   actedThisRound Json? // [ids que já agiram nesta rodada]
 
-  room Room?       @relation(fields: [roomId], references: [id])
-  logs CombatLog[]
+  room  Room?       @relation(fields: [roomId], references: [id])
+  scene Scene?      @relation(fields: [sceneId], references: [id])
+  logs  CombatLog[]
+  playerSessions PlayerSession[]
+  scenario Scenario? @relation(fields: [scenarioId], references: [id])
+  participantsRows CombatParticipant[]
 
   @@map("combat")
 }
@@ -365,11 +395,16 @@ model Room {
   id        Int      @id @default(autoincrement())
   name      String?
   code      String   @unique
+  status    String   @default("LOBBY")
+  ownerId   Int?
+  scenarioId Int?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
   participants RoomParticipant[]
   combats      Combat[]
+  owner        Character? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  scenario     Scenario? @relation(fields: [scenarioId], references: [id], onDelete: SetNull)
 
   @@map("room")
 }
@@ -378,14 +413,204 @@ model RoomParticipant {
   id          Int      @id @default(autoincrement())
   roomId      Int
   characterId Int
-  role        String
+  role        String   @default("PLAYER")
+  isReady     Boolean  @default(false)
   joinedAt    DateTime @default(now())
 
-  room      Room      @relation(fields: [roomId], references: [id])
-  character Character @relation(fields: [characterId], references: [id])
+  room      Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
 
   @@unique([roomId, characterId])
   @@index([roomId])
   @@index([characterId])
   @@map("room_participant")
+}
+
+model VisualPack {
+  id           Int      @id @default(autoincrement())
+  packId       String   @unique
+  name         String
+  version      String
+  description  String?
+  manifestJson Json
+  basePath     String
+  isPublic     Boolean  @default(false)
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  appearances CharacterAppearance[]
+  scenes      Scene[]
+
+  @@map("visual_pack")
+}
+
+model CharacterAppearance {
+  id           Int      @id @default(autoincrement())
+  characterId  Int      @unique
+  visualPackId Int?
+  packId       String?
+  skinKey      String   @default("default")
+  paletteKey   String?
+  scale        Float    @default(1.0)
+  offsetX      Int      @default(0)
+  offsetY      Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  character  Character   @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  visualPack VisualPack? @relation(fields: [visualPackId], references: [id], onDelete: SetNull)
+
+  @@map("character_appearance")
+}
+
+model Scene {
+  id           Int      @id @default(autoincrement())
+  sceneKey     String
+  name         String
+  visualPackId Int?
+  packId       String?
+  configJson   Json?
+  backgroundAssetId Int?
+  musicAssetId      Int?
+  meta              Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  visualPack VisualPack? @relation(fields: [visualPackId], references: [id], onDelete: SetNull)
+  backgroundAsset Asset? @relation("SceneBackground", fields: [backgroundAssetId], references: [id])
+  musicAsset      Asset? @relation("SceneMusic", fields: [musicAssetId], references: [id])
+  combats    Combat[]
+
+  @@unique([sceneKey, packId])
+  @@map("scene")
+}
+
+model Asset {
+  id             Int      @id @default(autoincrement())
+  name           String
+  type           String
+  storage        String
+  url            String
+  mime           String?
+  size           Int?
+  spritesheetUrl String?
+  frameWidth     Int?
+  frameHeight    Int?
+  animationMap   Json?
+  meta           Json?
+  createdAt      DateTime @default(now())
+
+  backgroundScenes Scene[] @relation("SceneBackground")
+  musicScenes      Scene[] @relation("SceneMusic")
+  backgroundScenarios Scenario[] @relation("ScenarioBackground")
+  appearanceBase    AppearanceProfile[] @relation("AppearanceBase")
+  appearanceIdle    AppearanceProfile[] @relation("AppearanceIdle")
+  appearanceWalk    AppearanceProfile[] @relation("AppearanceWalk")
+  appearanceHurt    AppearanceProfile[] @relation("AppearanceHurt")
+  appearanceDeath   AppearanceProfile[] @relation("AppearanceDeath")
+  actionAnims       ActionAnimationMap[] @relation("ActionAnim")
+  actionVfx         ActionAnimationMap[] @relation("ActionVfx")
+  actionSfx         ActionAnimationMap[] @relation("ActionSfx")
+
+  @@map("asset")
+}
+
+model AppearanceProfile {
+  id              Int      @id @default(autoincrement())
+  ownerType       String
+  ownerId         Int
+  baseSkinAssetId Int?
+  idleAnimAssetId Int?
+  walkAnimAssetId Int?
+  hurtAnimAssetId Int?
+  deathAnimAssetId Int?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  baseSkinAsset Asset? @relation("AppearanceBase", fields: [baseSkinAssetId], references: [id])
+  idleAnimAsset Asset? @relation("AppearanceIdle", fields: [idleAnimAssetId], references: [id])
+  walkAnimAsset Asset? @relation("AppearanceWalk", fields: [walkAnimAssetId], references: [id])
+  hurtAnimAsset Asset? @relation("AppearanceHurt", fields: [hurtAnimAssetId], references: [id])
+  deathAnimAsset Asset? @relation("AppearanceDeath", fields: [deathAnimAssetId], references: [id])
+
+  @@index([ownerType, ownerId])
+  @@unique([ownerType, ownerId])
+  @@map("appearance_profile")
+}
+
+model ActionAnimationMap {
+  id          Int      @id @default(autoincrement())
+  ownerType   String
+  ownerId     Int
+  actionKey   String
+  animAssetId Int
+  vfxAssetId  Int?
+  sfxAssetId  Int?
+  createdAt   DateTime @default(now())
+
+  animAsset Asset @relation("ActionAnim", fields: [animAssetId], references: [id])
+  vfxAsset  Asset? @relation("ActionVfx", fields: [vfxAssetId], references: [id])
+  sfxAsset  Asset? @relation("ActionSfx", fields: [sfxAssetId], references: [id])
+
+  @@index([ownerType, ownerId])
+  @@map("action_animation_map")
+}
+
+model Scenario {
+  id                Int      @id @default(autoincrement())
+  name              String
+  description       String?
+  backgroundAssetId Int?
+  propsJson         Json?
+  createdAt         DateTime @default(now())
+
+  backgroundAsset Asset? @relation("ScenarioBackground", fields: [backgroundAssetId], references: [id])
+  combats         Combat[]
+
+  @@map("scenario")
+}
+
+model EnemyTemplate {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  baseStatsJson       Json?
+  techniquesJson      Json?
+  appearanceProfileId Int?
+  createdAt           DateTime @default(now())
+
+  appearanceProfile AppearanceProfile? @relation(fields: [appearanceProfileId], references: [id])
+
+  @@map("enemy_template")
+}
+
+model CombatParticipant {
+  id         Int      @id @default(autoincrement())
+  combatId   Int
+  entityType String
+  entityId   Int
+  team       String
+  initiative Int?
+  isAlive    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  combat Combat @relation(fields: [combatId], references: [id])
+
+  @@index([combatId])
+  @@map("combat_participant")
+}
+
+model PlayerSession {
+  id          Int      @id @default(autoincrement())
+  token       String   @unique
+  characterId Int
+  combatId    Int?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  character Character @relation(fields: [characterId], references: [id])
+  combat    Combat?   @relation(fields: [combatId], references: [id])
+
+  @@map("player_session")
 }

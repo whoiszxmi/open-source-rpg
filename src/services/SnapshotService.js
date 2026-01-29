@@ -22,6 +22,11 @@ async function getPlayerSnapshot(prisma, characterId) {
       attack_anim_key: true,
       hit_anim_key: true,
       scene_key: true,
+      appearance_key: true,
+      idle_anim_key: true,
+      attack_anim_key: true,
+      hit_anim_key: true,
+      scene_key: true,
     },
   });
 
@@ -59,6 +64,11 @@ async function getPlayerSnapshot(prisma, characterId) {
     include: { visualPack: true },
   });
 
+  const appearance = await prisma.characterAppearance.findUnique({
+    where: { characterId: cid },
+    include: { visualPack: true },
+  });
+
   const blessings = await prisma.characterBlessing.findMany({
     where: { characterId: cid },
     include: { blessing: true },
@@ -75,10 +85,12 @@ async function getPlayerSnapshot(prisma, characterId) {
   );
 
   let combatScene = null;
+  let combatScene = null;
   let targets = [];
   if (participants.length > 0) {
     const targetIds = participants.filter((id) => Number(id) !== Number(cid));
     if (targetIds.length > 0) {
+      const targetRows = await prisma.character.findMany({
       const targetRows = await prisma.character.findMany({
         where: { id: { in: targetIds } },
         select: { id: true, name: true, is_dead: true },
@@ -95,12 +107,6 @@ async function getPlayerSnapshot(prisma, characterId) {
         appearance: appearanceMap.get(row.id) || null,
       }));
     }
-  } else {
-    targets = await prisma.character.findMany({
-      where: { id: { not: cid } },
-      select: { id: true, name: true, is_dead: true },
-      orderBy: { id: "asc" },
-    });
   }
 
   let combat = null;
@@ -118,6 +124,9 @@ async function getPlayerSnapshot(prisma, characterId) {
         sceneId: true,
         sceneKey: true,
         scenePackId: true,
+        sceneId: true,
+        sceneKey: true,
+        scenePackId: true,
       },
     });
     if (combatRow) {
@@ -132,6 +141,11 @@ async function getPlayerSnapshot(prisma, characterId) {
           where: { id: combatRow.sceneId },
         });
       }
+      if (combatRow.sceneId) {
+        combatScene = await prisma.scene.findUnique({
+          where: { id: combatRow.sceneId },
+        });
+      }
       combat = { ...combatRow, currentActorId };
     }
   }
@@ -140,6 +154,20 @@ async function getPlayerSnapshot(prisma, characterId) {
     acc[group.type] = group;
     return acc;
   }, {});
+
+  const computedModifiers = { stats: {} };
+  const traitSources = [
+    ...blessings.map((b) => b?.blessing),
+    ...curses.map((c) => c?.curse),
+  ].filter(Boolean);
+
+  for (const trait of traitSources) {
+    const stats = trait?.effects?.stats || {};
+    for (const [key, value] of Object.entries(stats)) {
+      const current = Number(computedModifiers.stats[key] || 0);
+      computedModifiers.stats[key] = current + Number(value || 0);
+    }
+  }
 
   const computedModifiers = { stats: {} };
   const traitSources = [
@@ -170,6 +198,7 @@ async function getPlayerSnapshot(prisma, characterId) {
     combatId: combatId || null,
     combat: combat ? JSON.parse(JSON.stringify(combat)) : null,
     scene: combatScene ? JSON.parse(JSON.stringify(combatScene)) : null,
+    scene: combatScene ? JSON.parse(JSON.stringify(combatScene)) : null,
     statGroups: JSON.parse(JSON.stringify(statGroups || [])),
     statsPhysical: groupMap.PHYSICAL
       ? JSON.parse(JSON.stringify(groupMap.PHYSICAL))
@@ -185,6 +214,7 @@ async function getPlayerSnapshot(prisma, characterId) {
       : null,
     blessings: JSON.parse(JSON.stringify(blessings || [])),
     curses: JSON.parse(JSON.stringify(curses || [])),
+    appearance: appearance ? JSON.parse(JSON.stringify(appearance)) : null,
     computedModifiers,
   };
 }

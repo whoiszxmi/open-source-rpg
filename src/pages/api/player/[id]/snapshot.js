@@ -1,7 +1,7 @@
 // src/pages/api/player/[id]/snapshot.js
 
-import { prisma } from "../../../database";
-import SnapshotService from "../../../services/SnapshotService";
+import { prisma } from "@/database";
+import { getPlayerSnapshot } from "@/services/SnapshotService";
 
 export default async function handler(req, res) {
   try {

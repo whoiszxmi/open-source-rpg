@@ -30,7 +30,7 @@ export default function MasterLogin() {
     setBusy(true);
 
     try {
-      await postJSON("/api/auth/master/login", { key });
+      await postJSON("/api/auth/master/login", { masterKey: key });
       router.push("/dashboard/overview");
     } catch (ex) {
       setErr(ex.message || "Falha ao entrar");

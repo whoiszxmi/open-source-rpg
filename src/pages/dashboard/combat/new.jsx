@@ -10,12 +10,11 @@ export async function getServerSideProps() {
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    prisma.character.findMany({
-      where: { is_npc: true },
+    prisma.enemyTemplate.findMany({
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    prisma.scene.findMany({
+    prisma.scenario.findMany({
       select: { id: true, name: true },
       orderBy: { createdAt: "desc" },
     }),
@@ -55,17 +54,17 @@ export default function CombatNew({ players, enemies, scenarios }) {
     }
 
     try {
-      const created = await postJSON("/api/combat/create", {
+      const created = await postJSON("/combat/start", {
         name,
         scenarioId: scenarioId ? Number(scenarioId) : null,
-        participantIds: participants,
+        players: selectedPlayers,
+        enemies: selectedEnemies,
       });
       const combatId = created?.combat?.id;
       if (!combatId) {
         setStatus("Falha ao criar combate.");
         return;
       }
-      await postJSON("/api/combat/start", { combatId });
       if (typeof window !== "undefined") {
         localStorage.setItem("rpg:lastCombatId", String(combatId));
       }

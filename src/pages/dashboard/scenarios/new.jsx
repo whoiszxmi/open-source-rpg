@@ -14,24 +14,27 @@ export async function getServerSideProps() {
 
 export default function NewScenario({ assets }) {
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [propsJson, setPropsJson] = useState("");
   const [backgroundAssetId, setBackgroundAssetId] = useState("");
-  const [musicAssetId, setMusicAssetId] = useState("");
   const [status, setStatus] = useState("");
 
   async function onSubmit(e) {
     e.preventDefault();
     setStatus("");
     try {
-      const payload = await postJSON("/api/scenarios/create", {
+      const payload = await postJSON("/scenarios", {
         name,
+        description,
         backgroundAssetId: backgroundAssetId ? Number(backgroundAssetId) : null,
-        musicAssetId: musicAssetId ? Number(musicAssetId) : null,
+        propsJson: propsJson ? JSON.parse(propsJson) : null,
       });
-      if (payload?.scene?.id) {
-        setStatus(`Cenário criado (#${payload.scene.id}).`);
+      if (payload?.scenario?.id) {
+        setStatus(`Cenário criado (#${payload.scenario.id}).`);
         setName("");
+        setDescription("");
+        setPropsJson("");
         setBackgroundAssetId("");
-        setMusicAssetId("");
       } else {
         setStatus("Falha ao criar cenário.");
       }
@@ -41,9 +44,8 @@ export default function NewScenario({ assets }) {
   }
 
   const backgroundAssets = (assets || []).filter(
-    (asset) => asset.type === "BACKGROUND",
+    (asset) => asset.type === "SCENE_BG" || asset.type === "BACKGROUND",
   );
-  const musicAssets = (assets || []).filter((asset) => asset.type === "MUSIC");
 
   return (
     <LayoutMaster title="Novo cenário">
@@ -53,6 +55,12 @@ export default function NewScenario({ assets }) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Nome do cenário"
+            className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none"
+          />
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Descrição"
             className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none"
           />
           <select
@@ -67,18 +75,12 @@ export default function NewScenario({ assets }) {
               </option>
             ))}
           </select>
-          <select
-            value={musicAssetId}
-            onChange={(e) => setMusicAssetId(e.target.value)}
-            className="h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none"
-          >
-            <option value="">Asset de música (opcional)</option>
-            {musicAssets.map((asset) => (
-              <option key={asset.id} value={asset.id}>
-                {asset.name} (#{asset.id})
-              </option>
-            ))}
-          </select>
+          <textarea
+            value={propsJson}
+            onChange={(e) => setPropsJson(e.target.value)}
+            placeholder='Props JSON (ex: {"spawnPoints":[]})'
+            className="min-h-[96px] w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none"
+          />
         </div>
 
         <button

@@ -3,10 +3,16 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 
 const navItems = [
-  { href: "/dashboard/overview", label: "Visão geral" },
+  { href: "/dashboard", label: "Visão geral" },
   { href: "/dashboard/characters", label: "Personagens" },
-  { href: "/dashboard/combats", label: "Combates" },
+  { href: "/dashboard/entities", label: "Inimigos" },
+  { href: "/dashboard/scenarios", label: "Cenários" },
+  { href: "/dashboard/combat/new", label: "Novo Combate" },
+  { href: "/dashboard/combat", label: "Combates Ativos" },
+  { href: "/dashboard/sessions", label: "Sessões" },
+  { href: "/dashboard/uploads", label: "Uploads/Assets" },
   { href: "/dashboard/blessings", label: "Bênçãos & Maldições" },
+  { href: "/dashboard/visualpacks", label: "Visual Packs" },
   { href: "/dashboard/rules", label: "Regras" },
   { href: "/dashboard/settings", label: "Configurações" },
 ];

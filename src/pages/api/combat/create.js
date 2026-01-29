@@ -20,7 +20,7 @@ export default async function handler(req, res) {
         name: name ? String(name) : null,
         isActive: false,
         participants,
-        sceneId: scenarioId ? Number(scenarioId) : null,
+        scenarioId: scenarioId ? Number(scenarioId) : null,
         roundNumber: 1,
         turnIndex: 0,
         turnOrder: [],

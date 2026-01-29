@@ -6,22 +6,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { name, backgroundAssetId, musicAssetId, meta } = req.body || {};
+    const { name, description, backgroundAssetId, propsJson } = req.body || {};
     if (!name || !String(name).trim()) {
       return res.status(400).json({ ok: false, error: "missing_name" });
     }
 
-    const scene = await prisma.scene.create({
+    const scenario = await prisma.scenario.create({
       data: {
         name: String(name).trim(),
-        sceneKey: String(name).trim().toLowerCase().replace(/\s+/g, "_"),
+        description: description ? String(description) : null,
         backgroundAssetId: backgroundAssetId ? Number(backgroundAssetId) : null,
-        musicAssetId: musicAssetId ? Number(musicAssetId) : null,
-        meta: meta || null,
+        propsJson: propsJson || null,
       },
     });
 
-    return res.status(200).json({ ok: true, scene: JSON.parse(JSON.stringify(scene)) });
+    return res
+      .status(200)
+      .json({ ok: true, scenario: JSON.parse(JSON.stringify(scenario)) });
   } catch (e) {
     return res
       .status(500)
