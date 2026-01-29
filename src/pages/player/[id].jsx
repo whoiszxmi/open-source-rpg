@@ -8,7 +8,7 @@ import socket, {
   joinPortraitRoom,
   joinSnapshotRoom,
 } from "../../utils/socket";
-import { prisma } from "../../database";
+import { prisma } from "@/database";
 import { postJSON } from "../../lib/api";
 
 import PlayerHUD from "../../components/player/PlayerHUD";
@@ -21,7 +21,7 @@ import TraitsPanel from "../../components/player/TraitsPanel";
 import BlackFlashPanel from "../../components/player/BlackFlashPanel";
 import CombatContextPanel from "../../components/player/CombatContextPanel";
 import CombatAnimationLayer from "../../components/combat/CombatAnimationLayer";
-import { getPlayerSnapshot } from "../../services/SnapshotService";
+import { getPlayerSnapshot } from "@/services/SnapshotService";
 
 export const getServerSideProps = async ({ params }) => {
   const characterId = isNaN(params.id) ? null : Number(params.id);

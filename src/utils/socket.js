@@ -78,3 +78,9 @@ export function joinSnapshotRoom(characterId) {
   if (!s || !characterId) return;
   s.emit("snapshot:join", Number(characterId));
 }
+
+export function joinLobbyRoom(code) {
+  const s = getSocket();
+  if (!s || !code) return;
+  s.emit("room:join", `room_${String(code)}`);
+}

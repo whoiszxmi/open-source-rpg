@@ -16,6 +16,28 @@ function parseParticipants(raw) {
 async function getActiveCombatContext(prisma, characterId) {
   if (!characterId) return { combatId: null, participants: [] };
 
+  const roomParticipant = await prisma.roomParticipant.findFirst({
+    where: {
+      characterId: Number(characterId),
+      room: { status: "IN_COMBAT" },
+    },
+    select: { roomId: true },
+  });
+
+  if (roomParticipant?.roomId) {
+    const combat = await prisma.combat.findFirst({
+      where: { roomId: roomParticipant.roomId, isActive: true },
+      orderBy: { created_at: "desc" },
+      select: { id: true, participants: true },
+    });
+    if (combat) {
+      return {
+        combatId: Number(combat.id),
+        participants: parseParticipants(combat.participants),
+      };
+    }
+  }
+
   const rows = await prisma.$queryRaw`
     SELECT id, participants
     FROM combat

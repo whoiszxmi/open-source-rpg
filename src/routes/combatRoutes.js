@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { prisma } = require("../database");
+const { getIo } = require("../socketServer");
 
 const CombatStatusService = require("../services/CombatStatusService");
 
@@ -27,16 +28,17 @@ function shuffle(values) {
 // body: { name?: string, participants?: number[], roomCode?: string, scenarioId?: number, players?: number[], enemies?: number[] }
 router.post("/start", async (req, res) => {
   try {
-    const { name, participants, roomCode, scenarioId, players, enemies } = req.body || {};
+    const { name, participants, roomCode, scenarioId, players, enemies, code } = req.body || {};
     let resolvedParticipants = Array.isArray(participants) ? participants : null;
     let roomId = null;
     let playerIds = Array.isArray(players) ? players.map(Number).filter(Number.isFinite) : [];
     let enemyIds = Array.isArray(enemies) ? enemies.map(Number).filter(Number.isFinite) : [];
     let enemyCharacterIds = [];
+    const targetCode = code || roomCode;
 
-    if (roomCode) {
+    if (targetCode) {
       const room = await prisma.room.findUnique({
-        where: { code: String(roomCode).trim() },
+        where: { code: String(targetCode).trim() },
         select: { id: true },
       });
       if (!room) {
@@ -116,6 +118,21 @@ router.post("/start", async (req, res) => {
         where: { characterId: { in: playerIds } },
         data: { combatId: combat.id },
       });
+    }
+
+    if (roomId) {
+      const room = await prisma.room.update({
+        where: { id: roomId },
+        data: { status: "IN_COMBAT", scenarioId: scenarioId ? Number(scenarioId) : null },
+      });
+      const io = getIo();
+      if (io) {
+        io.to(`room_${room.code}`).emit("room:status", { status: room.status });
+        io.to(`room_${room.code}`).emit("combat:started", {
+          code: room.code,
+          combatId: combat.id,
+        });
+      }
     }
 
     return res.json({ ok: true, combat });

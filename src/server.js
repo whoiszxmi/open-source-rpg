@@ -4,6 +4,7 @@ const express = require("express");
 const http = require("http");
 const socketio = require("socket.io");
 const next = require("next");
+const { setIo } = require("./socketServer");
 
 // Ajuste paths se necessário
 const { prisma } = require("./database");
@@ -36,6 +37,7 @@ const sceneRoutes = require("./routes/visualpacks/sceneRoutes");
 const assetsRoutes = require("./routes/assetsRoutes");
 const enemyRoutes = require("./routes/enemyRoutes");
 const scenarioRoutes = require("./routes/scenarioRoutes");
+const roomRoutes = require("./routes/roomRoutes");
 
 const dev = process.env.NODE_ENV !== "production";
 
@@ -53,6 +55,7 @@ app.use("/scenes", sceneRoutes);
 app.use("/assets", assetsRoutes);
 app.use("/enemies", enemyRoutes);
 app.use("/scenarios", scenarioRoutes);
+app.use("/room", roomRoutes);
 
 app.get("/player/:id/snapshot", async (req, res) => {
   try {
@@ -375,6 +378,7 @@ app.post("/character/levelup", async (req, res) => {
 // Next + Socket
 const server = http.Server(app);
 const io = socketio(server, { cors: { origin: "*" } });
+setIo(io);
 
 const nextApp = next({ dev });
 const nextHandler = nextApp.getRequestHandler();

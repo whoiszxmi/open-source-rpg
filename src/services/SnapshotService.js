@@ -89,23 +89,6 @@ async function getPlayerSnapshot(prisma, characterId) {
         appearance: appearanceMap.get(row.id) || null,
       }));
     }
-  } else {
-    const targetRows = await prisma.character.findMany({
-      where: { id: { not: cid } },
-      select: { id: true, name: true, is_dead: true },
-      orderBy: { id: "asc" },
-    });
-    const targetIds = targetRows.map((row) => row.id);
-    const appearances = await prisma.characterAppearance.findMany({
-      where: { characterId: { in: targetIds } },
-    });
-    const appearanceMap = new Map(
-      appearances.map((row) => [row.characterId, row]),
-    );
-    targets = targetRows.map((row) => ({
-      ...row,
-      appearance: appearanceMap.get(row.id) || null,
-    }));
   }
 
   let combat = null;

@@ -9,6 +9,7 @@ const navItems = [
   { href: "/dashboard/scenarios", label: "Cenários" },
   { href: "/dashboard/combat/new", label: "Novo Combate" },
   { href: "/dashboard/combat", label: "Combates Ativos" },
+  { href: "/dashboard/sessions", label: "Sessões" },
   { href: "/dashboard/uploads", label: "Uploads/Assets" },
   { href: "/dashboard/blessings", label: "Bênçãos & Maldições" },
   { href: "/dashboard/visualpacks", label: "Visual Packs" },
